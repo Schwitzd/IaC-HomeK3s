@@ -1,0 +1,11 @@
+---
+- name: Duck SSH key provision
+  hosts: localhost
+  gather_facts: true
+
+  roles:
+    - role: schwitzd.collection.ssh_keygen
+      vars:
+        ssh_keygen_user: k3s
+        ssh_keygen_server: duck.schwitzd.me
+        ssh_keygen_name: duck.schwitzd.me_ed25519

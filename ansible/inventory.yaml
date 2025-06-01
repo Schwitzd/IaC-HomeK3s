@@ -1,0 +1,15 @@
+---
+all:
+  hosts:
+    cow:
+      ansible_host: cow.schwitzd.me
+      ansible_port: 22
+      ansible_ssh_private_key_file: ~/.ssh/cow.schwitzd.me_ed25519
+    duck:
+      ansible_host: duck.schwitzd.me
+      ansible_port: 22
+      ansible_ssh_private_key_file: ~/.ssh/duck.schwitzd.me_ed25519
+    sheep:
+      ansible_host: sheep.schwitzd.me
+      ansible_port: 22
+      ansible_ssh_private_key_file: ~/.ssh/sheep.schwitzd.me_ed25519

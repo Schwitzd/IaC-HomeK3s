@@ -1,0 +1,6 @@
+role: worker
+ipv6_conn_name: "Wired connection 1"
+ipv6_address: "fd12:3456:789a:14:3161:c474:a553:4ea2/64"
+ipv6_gateway: "fd12:3456:789a:14::1"
+ipv6_dns:
+  - "fd12:3456:789a:14::1"

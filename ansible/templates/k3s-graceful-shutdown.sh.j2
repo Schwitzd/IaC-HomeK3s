@@ -1,0 +1,149 @@
+#!/bin/bash
+set -euo pipefail
+
+# -- Logging function with timestamps, logs to both console and file --
+LOG_FILE="/var/log/k3s-shutdown.log"
+log() {
+  local ts
+  ts=$(date "+%Y-%m-%d %H:%M:%S")
+  echo "[$ts] $*" | tee -a "$LOG_FILE"
+}
+
+export KUBECONFIG=/home/k3s/.kube/config
+NODE_NAME=$(hostname)
+LOCK_NAMESPACE="kube-system"
+LOCK_NAME="shutdown-lock"
+KUBECTL="/usr/local/bin/kubectl"
+
+{% if role == "worker" %}
+# Wait 5 seconds for worker nodes
+log "[INFO] Worker node detected, waiting 10 seconds before proceeding..."
+sleep 10
+{% endif %}
+
+{% if role == "control-plane" %}
+# Function: Scale down all Deployments and StatefulSets for a given label selector
+scale_down_workloads() {
+  local label="$1"
+  local desc="$2"
+
+  log "[SHUTDOWN] Scaling down all Deployments and StatefulSets with label $label ($desc)..."
+
+  # Deployments
+  local deployments
+  deployments=$($KUBECTL get deployments --all-namespaces -l "$label" -o jsonpath='{range .items[*]}{.metadata.namespace}{";"}{.metadata.name}{"\n"}{end}')
+  for entry in $deployments; do
+    ns=$(echo "$entry" | cut -d';' -f1)
+    name=$(echo "$entry" | cut -d';' -f2)
+    log "  Scaling Deployment $name in namespace $ns to 0 replicas"
+    $KUBECTL -n "$ns" scale deployment "$name" --replicas=0
+  done
+
+  # StatefulSets
+  local statefulsets
+  statefulsets=$($KUBECTL get statefulsets --all-namespaces -l "$label" -o jsonpath='{range .items[*]}{.metadata.namespace}{";"}{.metadata.name}{"\n"}{end}')
+  for entry in $statefulsets; do
+    ns=$(echo "$entry" | cut -d';' -f1)
+    name=$(echo "$entry" | cut -d';' -f2)
+    log "  Scaling StatefulSet $name in namespace $ns to 0 replicas"
+    $KUBECTL -n "$ns" scale statefulset "$name" --replicas=0
+  done
+}
+
+# --- CONTROL-PLANE NODE: Create shutdown lock ConfigMap and scale down workloads ---
+log "[SHUTDOWN] Creating ConfigMap $LOCK_NAME in namespace $LOCK_NAMESPACE..."
+$KUBECTL -n "$LOCK_NAMESPACE" create configmap "$LOCK_NAME" --from-literal=initiator="$NODE_NAME" --dry-run=client -o yaml | $KUBECTL apply -f -
+
+# Scale down ArgoCD workloads (Deployments and StatefulSets)
+scale_down_workloads "app.kubernetes.io/name=argocd-application-controller" "ArgoCD"
+
+sleep 10
+
+# Scale down Longhorn workloads (Deployments and StatefulSets)
+scale_down_workloads "storage=longhorn" "Longhorn"
+
+log "[SHUTDOWN] Waiting for all storage=longhorn pods to terminate..."
+while $KUBECTL get pods --all-namespaces -l storage=longhorn 2>/dev/null | grep -qE 'Running|Pending'; do
+  log "  ...still waiting for storage=longhorn pods to terminate"
+  sleep 5
+done
+
+log "[SHUTDOWN] All storage=longhorn pods terminated."
+
+log "[SHUTDOWN] Waiting for all Longhorn volumes to be detached from all nodes..."
+
+while true; do
+  ATTACHED=$($KUBECTL -n longhorn-system get volumes -o json | jq -e '.items[] | select(.status.state == "attached")' | wc -l || true)
+  if [[ "$ATTACHED" -eq 0 ]]; then
+    break
+  fi
+  log "  ...still waiting for Longhorn volumes to detach from all nodes"
+  sleep 5
+done
+
+log "[SHUTDOWN] All Longhorn volumes detached from all nodes."
+
+
+log "[SHUTDOWN] Removing shutdown lock ConfigMap $LOCK_NAME in namespace $LOCK_NAMESPACE..."
+$KUBECTL -n "$LOCK_NAMESPACE" delete configmap "$LOCK_NAME" --ignore-not-found
+{% endif %}
+
+{% if role == "worker" %}
+# --- WORKER NODE: Wait if control-plane lock exists, then cordon, drain, shutdown ---
+log "[SHUTDOWN] Checking for shutdown lock ConfigMap..."
+
+while $KUBECTL -n "$LOCK_NAMESPACE" get configmap "$LOCK_NAME" >/dev/null 2>&1; do
+  log "[SHUTDOWN] Lock ConfigMap $LOCK_NAME exists, waiting..."
+  sleep 10
+done
+
+log "[SHUTDOWN] No shutdown lock found, proceeding..."
+{% endif %}
+
+{% if role == "control-plane" %}
+# --- CONTROL-PLANE NODE: Wait for all others to be gone ---
+log "[SHUTDOWN] Waiting for all workers to shutdown first..."
+while true; do
+  READY_NODES=$($KUBECTL get nodes -o json | jq -r --arg NODE "$NODE_NAME" \
+    '.items[] | select(.metadata.name != $NODE) | select((.spec.unschedulable != true) and (.status.conditions[] | select(.type=="Ready" and .status=="True"))) | .metadata.name')
+  if [[ -z "$READY_NODES" ]]; then
+    log "[SHUTDOWN] All worker nodes are shutdown or NotReady. Proceeding..."
+    sleep 15
+    break
+  else
+    log "[SHUTDOWN] Waiting for nodes: $READY_NODES"
+    sleep 10
+  fi
+done
+{% endif %}
+
+log "[SHUTDOWN] Cordoning $NODE_NAME"
+$KUBECTL cordon "$NODE_NAME" || true
+
+log "[SHUTDOWN] Draining $NODE_NAME"
+$KUBECTL drain "$NODE_NAME" \
+  --ignore-daemonsets \
+  --force \
+  --delete-emptydir-data \
+  --disable-eviction=true || true
+
+{% if role == "control-plane" %}
+log "[SHUTDOWN] Stopping k3s (control-plane)"
+if systemctl is-active --quiet k3s; then
+  sudo systemctl stop k3s
+else
+  log "[SHUTDOWN] k3s service already stopped or not present."
+fi
+{% endif %}
+{% if role == "worker" %}
+log "[SHUTDOWN] Stopping k3s-agent (worker)"
+if systemctl is-active --quiet k3s-agent; then
+  sudo systemctl stop k3s-agent
+else
+  log "[SHUTDOWN] k3s-agent service already stopped or not present."
+fi
+{% endif %}
+
+log "[SHUTDOWN] Powering off node"
+sudo shutdown -h now
+exit 0

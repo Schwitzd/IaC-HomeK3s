@@ -1,0 +1,12 @@
+---
+apiVersion: metallb.io/v1beta1
+kind: IPAddressPool
+metadata:
+  name: default-pool
+  namespace: infrastructure
+spec:
+  addresses:
+    - 192.168.14.50-192.168.14.54
+    - fd12:3456:789a:14::50-fd12:3456:789a:14::54
+
+

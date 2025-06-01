@@ -1,0 +1,25 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: fastapi-mailer-ingress
+  namespace: ${namespace}
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: "websecure"
+    cert-manager.io/cluster-issuer: "le-clusterissuer"
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: mailer.api.schwitzd.me
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: fastapi-mailer
+                port:
+                  number: 80
+  tls:
+    - secretName: tls-fastapi-mailer
+      hosts:
+        - mailer.api.schwitzd.me

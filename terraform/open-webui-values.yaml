@@ -1,0 +1,28 @@
+ollama:
+  enabled: false
+  ollamaUrls: ["${ollama_host}"]
+
+service:
+  type: ClusterIP
+  port: 8080
+
+ingress:
+  enabled: true
+  className: "traefik"
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: "websecure"
+    cert-manager.io/cluster-issuer: "le-clusterissuer"
+  host: ${open-webui_ingress_fqdn}
+  tls: true
+  existingSecret: tls-open-webui-ingress
+
+#extraEnvVars:
+#  - name: OLLAMA_BASE_URL
+#    value: ${ollama_host}
+#  - name: WEBUI_BASE_URL
+#    value: https://${open-webui_ingress_fqdn}
+
+persistence:
+  enabled: true
+  storageClass: local-path
+  size: 1Gi

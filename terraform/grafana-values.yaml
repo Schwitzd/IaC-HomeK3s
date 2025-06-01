@@ -1,0 +1,22 @@
+service:
+  type: ClusterIP
+  port: 80
+
+persistence:
+  enabled: true
+  size: 5Gi
+
+ingress:
+  enabled: true
+  ingressClassName: traefik
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: "websecure"
+    cert-manager.io/cluster-issuer: "le-clusterissuer"
+  path: /
+  pathType: Prefix
+  hosts:
+    - grafana.schwitzd.me
+  tls:
+    - secretName: tls-grafana-ingress
+      hosts:
+        - grafana.schwitzd.me

@@ -1,0 +1,52 @@
+global:
+  domain: "${argocd_domain}"
+
+configs:
+  params:
+    server.insecure: true
+  cm:
+    accounts.image-updater: login, apiKey
+    kustomize.buildOptions: "--enable-helm"
+
+  secret:
+    argocdServerAdminPassword: "${argocd_server_admin_password}"
+
+  rbac:
+    policy.csv: |
+      # Admin Role - Full Access + API Key Generation
+      g, admin, role:admin
+      p, role:admin, applications, *, */*, allow
+      p, role:admin, clusters, *, *, allow
+      p, role:admin, repositories, *, *, allow
+      p, role:admin, projects, *, *, allow
+      p, role:admin, logs, get, *, allow
+      p, role:admin, accounts, get, *, allow
+      p, role:admin, accounts, update, *, allow
+
+      # Image Updater Role - Restricted Access
+      g, image-updater, role:image-updater
+      p, role:image-updater, applications, get, */*, allow
+      p, role:image-updater, applications, update, */*, allow
+      p, role:image-updater, repositories, get, */*, allow
+
+    policy.default: role:readonly 
+
+server:
+  service:
+    type: ClusterIP
+    servicePortHttp: 80 
+    servicePortHttps: 443
+
+  ingress:
+    enabled: true
+    ingressClassName: traefik
+    annotations:
+      traefik.ingress.kubernetes.io/router.entrypoints: "websecure"
+      cert-manager.io/cluster-issuer: "le-clusterissuer"
+    hostname: "${argocd_domain}"
+    path: /
+    pathType: Prefix
+    tls: true
+
+dex:
+  enabled: false

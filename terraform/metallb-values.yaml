@@ -1,0 +1,15 @@
+controller:
+  enabled: true
+
+speaker:
+  enabled: true
+  tolerateMaster: true
+  frr:
+    enabled: false  
+
+rbac:
+  create: true
+
+crds:
+  enabled: true
+  validationFailurePolicy: Fail

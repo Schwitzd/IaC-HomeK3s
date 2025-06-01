@@ -1,0 +1,26 @@
+replicas: 2
+
+service:
+  enabled: true
+  type: LoadBalancer
+  externalIPs:
+    - ${traefik_ipv4}
+    - ${traefik_ipv6}
+  annotations:
+    metallb.universe.tf/allow-shared-ip: "traefik"
+  ipFamilyPolicy: RequireDualStack
+  ipFamilies:
+    - IPv4
+    - IPv6
+
+ports:
+  web:
+    port: 80
+    expose:
+      default: true
+    exposedPort: 80
+  websecure:
+    port: 443
+    expose:
+      default: true
+    exposedPort: 443

@@ -1,0 +1,49 @@
+nodeSelector:
+  ai-node: "true"
+
+ollama:
+  gpu:
+    enabled: false
+  models:
+    pull:
+      - deepseek-r1:1.5b
+    run:
+      - deepseek-r1:1.5b
+  extraEnv:
+    - name: OLLAMA_FLASH_ATTENTION
+      value: "0"
+    - name: OLLAMA_KV_CACHE_TYPE
+      value: "q8_0"
+    - name: OLLAMA_KEEP_ALIVE
+      value: "-1"
+    - name: OLLAMA_MAX_LOADED_MODELS
+      value: "1"
+    - name: OLLAMA_NUM_PARALLEL
+      value: "1"
+    - name: OLLAMA_MAX_QUEUE
+      value: "256"
+
+persistentVolume:
+  enabled: true
+  storageClass: local-path
+  size: 10Gi
+
+service:
+  type: ClusterIP
+  port: 11434
+
+ingress:
+  enabled: true
+  className: traefik
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    cert-manager.io/cluster-issuer: le-clusterissuer
+  hosts:
+    - host: ${ollama_ingress_fqdn}
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: tls-ollama-ingress
+      hosts:
+        - ${ollama_ingress_fqdn}

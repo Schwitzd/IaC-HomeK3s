@@ -1,0 +1,12 @@
+[Unit]
+Description=Post-startup tasks for k3s node
+After={{ k3s_service_name }}.service
+Requires={{ k3s_service_name }}.service
+
+[Service]
+Type=oneshot
+User=root
+ExecStart=/usr/local/bin/k3s-post-startup.sh
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,22 @@
+server:
+  persistentVolume:
+    enabled: true
+    storageClass: local-path
+
+  resources:
+    limits:
+      memory: "256Mi"
+      cpu: "500m"
+    requests:
+      memory: "128Mi"   
+      cpu: "250m"
+
+extraScrapeConfigs: |
+  - job_name: "mktxp"
+    static_configs:
+      - targets: 
+        - "mktxp-exporter:49090"
+
+alertmanager:
+  persistence:
+    size: 50Mi

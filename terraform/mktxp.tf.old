@@ -1,0 +1,26 @@
+data "vault_generic_secret" "mktxp" {
+  path = "${var.vault_name}/mktxp"
+}
+
+data "template_file" "mktxp_secret" {
+  template = file("${path.module}/mktxp-secret.yaml")
+
+  vars = {
+    namespace = kubernetes_namespace.namespaces["monitoring"].metadata[0].name
+    hostname  = data.vault_generic_secret.mktxp.data["hostname"]
+    username  = data.vault_generic_secret.mktxp.data["username"]
+    password  = data.vault_generic_secret.mktxp.data["password"]
+  }
+}
+
+resource "kubernetes_manifest" "mktxp_secret" {
+  manifest = yamldecode(data.template_file.mktxp_secret.rendered)
+}
+
+resource "kubernetes_manifest" "mktxp_deployment" {
+  manifest = yamldecode(file("${path.module}/mktxp-deployment.yaml"))
+}
+
+resource "kubernetes_manifest" "mktxp_service" {
+  manifest = yamldecode(file("${path.module}/mktxp-service.yaml"))
+}

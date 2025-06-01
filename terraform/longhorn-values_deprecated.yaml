@@ -1,0 +1,18 @@
+defaultSettings:
+  defaultReplicaCount: ${longhorn_default_replica_count}
+  defaultDataPath: "${longhorn_default_data_path}"
+  replicaAutoBalance: best-effort
+  defaultDataLocality: best-effort
+  nodeDownPodDeletionPolicy: delete-both-statefulset-and-deployment-pod
+  allowCollectingLonghornUsageMetrics: false
+
+ingress:
+  enabled: true
+  host: ${longhorn_ingress_fqdn}
+  ingressClassName: traefik
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: "websecure"
+    cert-manager.io/cluster-issuer: "le-clusterissuer"
+  path: /
+  tls: true
+  tlsSecret: tls-longhorn-ingress

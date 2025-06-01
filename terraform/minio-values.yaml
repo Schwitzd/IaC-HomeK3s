@@ -1,0 +1,55 @@
+mode: standalone
+
+auth:
+  rootUser: "${minio_root_user}"
+  rootPassword: "${minio_root_pass}"
+
+persistence:
+  enabled: true
+  storageClass: local-path
+  size: 5Gi
+
+metrics:
+  enabled: false
+
+ingress:
+  enabled: true
+  ingressClassName: traefik
+  hostname: ${minio_console_fqdn}
+  annotations:
+    cert-manager.io/cluster-issuer: "le-clusterissuer"
+    traefik.ingress.kubernetes.io/router.entrypoints: "websecure"
+  hosts:
+    - host: ${minio_console_fqdn}
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: tls-minio-ingress
+      hosts:
+        - ${minio_console_fqdn}
+
+apiIngress:
+  enabled: true
+  ingressClassName: traefik
+  hostname: ${minio_api_fqdn}
+  annotations:
+    cert-manager.io/cluster-issuer: "le-clusterissuer"
+    traefik.ingress.kubernetes.io/router.entrypoints: "websecure"
+  hosts:
+    - host: ${minio_api_fqdn}
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: tls-minio-api-ingress
+      hosts:
+        - ${minio_api_fqdn}
+
+resources:
+  requests:
+    cpu: "250m"
+    memory: "256Mi"
+  limits:
+    cpu: "250m"
+    memory: "256Mi"

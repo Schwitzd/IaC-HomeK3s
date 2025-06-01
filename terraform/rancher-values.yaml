@@ -1,0 +1,29 @@
+hostname: ${rancher_ingress_fqdn}
+bootstrapPassword: ${rancher_password}
+
+replicas: 1
+
+ingress:
+  enabled: true
+  ingressClassName: traefik
+  extraAnnotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    cert-manager.io/cluster-issuer: le-clusterissuer
+  tls:
+    source: secret
+    secretName: tls-rancher-ingress
+
+auditLog:
+  destination: sidecar
+  level: 2
+  maxAge: 1
+  maxBackup: 1
+  maxSize: 100
+
+resources:
+  limits:
+    cpu: "1"
+    memory: "1Gi"
+  requests:
+    cpu: "250m"
+    memory: "512Mi"

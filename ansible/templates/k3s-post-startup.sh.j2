@@ -1,0 +1,36 @@
+#!/bin/bash
+set -euo pipefail
+
+export KUBECONFIG=/home/k3s/.kube/config
+NODE_NAME=$(hostname)
+KUBECTL="/usr/local/bin/kubectl"
+
+log() {
+  local ts
+  ts=$(date "+%Y-%m-%d %H:%M:%S")
+  echo "[$ts] $*" | tee -a /var/log/k3s-post-startup.log
+}
+
+{% if role == "worker" %}
+# --- WORKER: Wait ensure control-plane node is ready ---
+log "[POST-STARTUP] Worker node detected, waiting 8 seconds for control-plane to be ready..."
+sleep 30
+{% endif %}
+
+log "[POST-STARTUP] Uncordoning $NODE_NAME..."
+$KUBECTL uncordon "$NODE_NAME" || true
+
+{% if role == "control-plane" %}
+# --- CONTROL-PLANE: Scale up ArgoCD ApplicationSet controller ---
+log "[POST-STARTUP] Scaling up ArgoCD ApplicationSet controller..."
+
+ARGOCD_APPSET=$($KUBECTL get statefulsets -A -l app.kubernetes.io/name=argocd-application-controller -o jsonpath='{range .items[*]}{.metadata.namespace}{";"}{.metadata.name}{"\n"}{end}')
+
+for entry in $ARGOCD_APPSET; do
+  ns=$(echo "$entry" | cut -d';' -f1)
+  name=$(echo "$entry" | cut -d';' -f2)
+  # You can change "1" below to your desired replica count
+  log "  Scaling ApplicationSet controller $name in namespace $ns to 1 replica"
+  $KUBECTL -n "$ns" scale statefulsets "$name" --replicas=1
+done
+{% endif %}

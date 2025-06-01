@@ -1,0 +1,251 @@
+---
+- name: Configure Raspberry Pi K3s Cluster
+  hosts: all
+  remote_user: k3s
+  become: true
+
+  vars:
+    btrfs_disk_device: /dev/nvme0n1
+    btrfs_mount_point: /mnt/nvme0
+
+  tasks:
+    # Install Btrfs Tools
+    - name: Install btrfs-progs
+      ansible.builtin.package:
+        name: btrfs-progs
+        state: present
+      tags: storage
+
+    # Install jq
+    - name: Ensure jq is installed
+      ansible.builtin.package:
+        name: jq
+        state: present
+      tags: shutdown
+
+    # Create a new GPT partition table
+    - name: Create primary partition for Btrfs
+      community.general.parted:
+        device: "{{ btrfs_disk_device }}"
+        number: 1
+        part_start: 1MiB
+        part_end: 100%
+        fs_type: btrfs
+        state: present
+      tags: storage
+
+    # Create a single primary partition that spans the whole disk
+    - name: Create primary partition for Btrfs
+      community.general.parted:
+        device: "{{ btrfs_disk_device }}"
+        number: 1
+        part_start: 1MiB
+        part_end: 100%
+        fs_type: btrfs
+        state: present
+      tags: storage
+
+    # Format the partition with Btrfs
+    - name: Format partition as Btrfs
+      community.general.filesystem:
+        fstype: btrfs
+        dev: "{{ btrfs_disk_device }}p1"
+        force: true
+      tags: storage
+
+    # Retrieve the UUID of the newly created Btrfs partition
+    - name: Retrieve UUID of Btrfs partition
+      ansible.builtin.command: "blkid -s UUID -o value {{ btrfs_disk_device }}p1"
+      register: btrfs_uuid
+      changed_when: false
+      tags: storage
+
+    # Ensure that the UUID was successfully retrieved
+    - name: Ensure UUID was retrieved
+      ansible.builtin.fail:
+        msg: "Failed to retrieve UUID for {{ btrfs_disk_device }}p1. Make sure the partition is formatted as Btrfs."
+      when: btrfs_uuid.stdout == ""
+      tags: storage
+
+    # Create the target mount point directory
+    - name: Create mount point {{ btrfs_mount_point }}
+      ansible.builtin.file:
+        path: "{{ btrfs_mount_point }}"
+        state: directory
+        mode: '0755'
+      tags: storage
+
+    # Mount the Btrfs partition using its UUID
+    - name: Mount Btrfs partition at {{ btrfs_mount_point }}
+      ansible.posix.mount:
+        path: "{{ btrfs_mount_point }}"
+        src: "UUID={{ btrfs_uuid.stdout }}"
+        fstype: btrfs
+        opts: rw,nosuid,nodev,noexec,noatime,nodiratime,compress=zstd:3,ssd,discard=async,space_cache=v2,autodefrag,subvolid=5,subvol=/
+        state: mounted
+      tags: storage
+
+    # Ensure a persistent mount by updating /etc/fstab with the UUID
+    - name: Ensure UUID-based entry in /etc/fstab
+      ansible.builtin.lineinfile:
+        path: /etc/fstab
+        line: "UUID={{ btrfs_uuid.stdout }} {{ btrfs_mount_point }} btrfs rw,nosuid,nodev,noexec,noatime,nodiratime,compress=zstd:3,ssd,discard=async,space_cache=v2,autodefrag,subvolid=5,subvol=/ 0 0"
+        state: present
+      tags: storage
+
+    # Enable cgroups for K3s
+    - name: Ensure cgroups are enabled in cmdline.txt
+      ansible.builtin.lineinfile:
+        path: /boot/firmware/cmdline.txt
+        backrefs: true
+        regexp: '^((?!cgroup_memory=1).*)$'
+        line: '\1 cgroup_memory=1 cgroup_enable=memory'
+        state: present
+      notify: Reboot system (cgroups change requires reboot)
+      tags: cgroups
+
+    - name: Set permissions on kubeconfig so root can read it
+      ansible.builtin.file:
+        path: /home/k3s/.kube/config
+        mode: '0640'
+        owner: k3s
+        group: root
+      tags: kubeconfig, permissions
+
+    # Longhorn folder
+    - name: Create Longhorn data folder under {{ btrfs_mount_point }}
+      ansible.builtin.file:
+        path: "{{ btrfs_mount_point }}/longhorn"
+        state: directory
+        mode: '0755'
+        owner: root
+        group: root
+      tags: k3s
+
+    # Longhorn requirements
+    - name: Install open-iscsi for Longhorn
+      ansible.builtin.apt:
+        name: open-iscsi
+        state: present
+        update_cache: true
+
+    # Configure static IPv6 networking using NetworkManager via nmcli
+    - name: Set IPv6 to manual and assign static address
+      community.general.nmcli:
+        type: ethernet
+        conn_name: "{{ ipv6_conn_name }}"
+        autoconnect: true
+        method6: manual
+        ip6: ["{{ ipv6_address }}"]
+        gw6: "{{ ipv6_gateway }}"
+        dns6: "{{ ipv6_dns }}"
+        state: present
+      tags: network, ipv6
+
+    - name: Restart NetworkManager to apply changes
+      ansible.builtin.systemd:
+        name: NetworkManager
+        state: restarted
+      tags: network, ipv6
+
+    # Configure K3s Garbage Collection Settings
+    - name: Ensure K3s environment file exists with strict permissions
+      ansible.builtin.file:
+        path: /etc/systemd/system/k3s.service.env
+        state: touch
+        mode: '0600'
+        owner: root
+        group: root
+      tags: k3s
+
+    - name: Set K3s garbage collection environment variables
+      ansible.builtin.lineinfile:
+        path: /etc/systemd/system/k3s.service.env
+        regexp: "^{{ item.key }}="
+        line: "{{ item.key }}={{ item.value }}"
+        create: true
+      loop:
+        - { key: "K3S_GC_IMAGE_AGE", value: "72h" }
+        - { key: "K3S_GC_IMAGE_CLEANUP_PERIOD", value: "1d" }
+      when: master_node | bool
+      tags: k3s
+
+    - name: Reload systemd daemon
+      ansible.builtin.systemd:
+        daemon_reload: true
+      tags: systemd, k3s
+
+    - name: Restart K3s service
+      ansible.builtin.systemd:
+        name: k3s
+        state: restarted
+      tags: systemd, k3s
+
+    # Enable IPv6 Forwarding
+    - name: Create a sysctl config file for IPv6 forwarding
+      ansible.builtin.copy:
+        dest: "/etc/sysctl.d/98-ipv6.conf"
+        content: "net.ipv6.conf.all.forwarding = 1\n"
+        owner: root
+        group: root
+        mode: "0644"
+      notify: Reload sysctl
+      tags: systemd, ipv6
+
+    # Schedule Raspberry Pi Shutdown at 08:30 AM
+
+    - name: Deploy graceful shutdown script
+      ansible.builtin.template:
+        src: k3s-graceful-shutdown.sh.j2
+        dest: /usr/local/bin/k3s-graceful-shutdown.sh
+        owner: root
+        group: root
+        mode: '0755'
+      tags: shutdown
+
+    - name: Set K3s service name
+      ansible.builtin.set_fact:
+        k3s_service_name: "{{ 'k3s' if role == 'control-plane' else 'k3s-agent' }}"
+      tags: startup
+
+    - name: Schedule graceful cluster shutdown
+      ansible.builtin.cron:
+        name: "Graceful cluster shutdown"
+        minute: "20"
+        hour: "9"
+        job: "/usr/local/bin/k3s-graceful-shutdown.sh"
+        user: root
+      tags: shutdown
+
+    - name: Deploy k3s-post-startup script
+      ansible.builtin.template:
+        src: k3s-post-startup.sh.j2
+        dest: /usr/local/bin/k3s-post-startup.sh
+        mode: "0755"
+      notify: Reload systemd
+      tags: startup
+
+    - name: Deploy k3s-post-startup systemd unit
+      ansible.builtin.template:
+        src: k3s-post-startup.service.j2
+        dest: /etc/systemd/system/k3s-post-startup.service
+        mode: "0644"
+      notify: Reload systemd
+      tags: startup
+
+    - name: Enable k3s-post-startup service
+      ansible.builtin.systemd:
+        name: k3s-post-startup.service
+        enabled: true
+      tags: startup
+
+  handlers:
+    - name: Reboot system (cgroups change requires reboot)
+      ansible.builtin.reboot:
+
+    - name: Reload sysctl
+      ansible.builtin.command: sysctl --system
+
+    - name: Reload systemd
+      ansible.builtin.systemd:
+        daemon_reload: true

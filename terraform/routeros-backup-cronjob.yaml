@@ -1,0 +1,105 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: routeros-backup
+  namespace: ${namespace}
+  labels:
+    app: routeros-backup
+spec:
+  schedule: "15 6 * * 4"  # Runs every Thursday at 06:10 UTC
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      ttlSecondsAfterFinished: 259200  # 72 hours
+      backoffLimit: 2
+      template:
+        metadata:
+          labels:
+            app: routeros-backup
+        spec:
+          restartPolicy: Never
+          containers:
+            - name: routeros-backup
+              image: ${image}
+              imagePullPolicy: IfNotPresent
+              command: ["python", "-m", "routeros_backup.main"]
+              env:
+                - name: ROUTER_HOST
+                  valueFrom:
+                    secretKeyRef:
+                      name: routeros-backup-secret
+                      key: ROUTER_HOST
+                - name: ROUTER_USER
+                  valueFrom:
+                    secretKeyRef:
+                      name: routeros-backup-secret
+                      key: ROUTER_USER
+                - name: SSH_KEY_PATH
+                  valueFrom:
+                    secretKeyRef:
+                      name: routeros-backup-secret
+                      key: SSH_KEY_PATH
+                - name: BACKUPNAME_PREFIX
+                  valueFrom:
+                    secretKeyRef:
+                      name: routeros-backup-secret
+                      key: BACKUPNAME_PREFIX
+                - name: BACKUP_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: routeros-backup-secret
+                      key: BACKUP_PASSWORD
+                - name: S3_ENDPOINT
+                  valueFrom:
+                    secretKeyRef:
+                      name: routeros-backup-secret
+                      key: S3_ENDPOINT
+                - name: S3_ACCESS_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: routeros-backup-secret
+                      key: S3_ACCESS_KEY
+                - name: S3_SECRET_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: routeros-backup-secret
+                      key: S3_SECRET_KEY
+                - name: S3_BUCKET
+                  valueFrom:
+                    secretKeyRef:
+                      name: routeros-backup-secret
+                      key: S3_BUCKET
+                - name: S3_PREFIX
+                  valueFrom:
+                    secretKeyRef:
+                      name: routeros-backup-secret
+                      key: S3_PREFIX
+                - name: BACKUP_DEST_TYPE
+                  valueFrom:
+                    secretKeyRef:
+                      name: routeros-backup-secret
+                      key: BACKUP_DEST_TYPE
+                - name: RETENTION_POINTS
+                  valueFrom:
+                    secretKeyRef:
+                      name: routeros-backup-secret
+                      key: RETENTION_POINTS
+              volumeMounts:
+                - name: ssh-key
+                  mountPath: /secrets
+                  readOnly: true
+              resources:
+                requests:
+                  cpu: "50m"
+                  memory: "128Mi"
+                limits:
+                  cpu: "150m"
+                  memory: "256Mi"
+          volumes:
+            - name: ssh-key
+              secret:
+                secretName: routeros-backup-ssh-key
+              items:
+                - key: routeros-backup_ed25519
+                  path: routeros-backup_ed25519

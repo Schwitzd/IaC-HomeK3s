@@ -1,0 +1,120 @@
+adminPassword: ${adminPassword}
+externalURL: ${externalURL}
+exposureType: ingress
+commonLabels:
+  storage: longhorn
+
+postgresql:
+  enabled: false
+
+externalDatabase:
+  host: ${external_database_host}
+  port: 5432
+  user: ${external_database_user}
+  password: "${external_database_password}"
+  coreDatabase: harbor
+
+trivy:
+  enabled: false
+
+persistence:
+  enabled: true
+  persistentVolumeClaim:
+    registry:
+      size: 5Gi
+      storageClass: longhorn
+
+metrics:
+  enabled: false
+
+ingress:
+  core:
+    ingressClassName: traefik
+    hostname: ${harbor_ingress_fqdn}
+    annotations:
+      cert-manager.io/cluster-issuer: "le-clusterissuer"
+      traefik.ingress.kubernetes.io/router.entrypoints: "websecure"
+    hosts:
+      - host: ${harbor_ingress_fqdn}
+        paths:
+          - path: /
+            pathType: Prefix
+    tls:
+      - secretName: tls-harbor-ingress
+        hosts:
+          - ${harbor_ingress_fqdn}
+
+core:
+  resources:
+    requests:
+      cpu: "250m"
+      memory: "512Mi"
+    limits:
+      cpu: "500m"
+      memory: "512Mi"
+
+jobservice:
+  resources:
+    requests:
+      cpu: "250m"
+      memory: "512Mi"
+    limits:
+      cpu: "500m"
+      memory: "512Mi"
+  initContainers:
+    - name: wait-for-longhorn
+      image: schwitzd/wait-for-longhorn:latest
+      imagePullPolicy: Always
+      env:
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: LONGHORN_API
+          value: "http://longhorn-backend.longhorn-system.svc.cluster.local:9500"
+
+registry:
+  server:
+    resources:
+      requests:
+        cpu: "250m"
+        memory: "512Mi"
+      limits:
+        cpu: "500m"
+        memory: "512Mi"
+  initContainers:
+    - name: wait-for-longhorn
+      image: schwitzd/wait-for-longhorn:latest
+      imagePullPolicy: Always
+      env:
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: LONGHORN_API
+          value: "http://longhorn-backend.longhorn-system.svc.cluster.local:9500"
+
+portal:
+  resources:
+    requests:
+      cpu: "250m"
+      memory: "512Mi"
+    limits:
+      cpu: "500m"
+      memory: "512Mi"
+
+redis:
+  enabled: false
+
+externalRedis:
+  host: ${external_redis_host}
+  port: ${external_redis_port}
+  password: "${external_redis_password}"
+  coreDatabaseIndex: 0
+  jobserviceDatabaseIndex: 1
+  registryDatabaseIndex: 2
+  trivyAdapterDatabaseIndex: 5
+  tls:
+    enabled: false
+  sentinel:
+    enabled: false
