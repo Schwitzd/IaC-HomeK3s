@@ -9,7 +9,7 @@ resource "helm_release" "argocd" {
   namespace       = kubernetes_namespace.namespaces["infrastructure"].metadata[0].name
   chart           = "argo-cd"
   repository      = "https://argoproj.github.io/argo-helm"
-  version         = "8.0.9"
+  version         = "8.0.14"
   cleanup_on_fail = true
 
   values = [
