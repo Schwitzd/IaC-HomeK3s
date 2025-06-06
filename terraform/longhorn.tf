@@ -43,6 +43,12 @@ resource "argocd_application" "longhorn" {
         }
       }
     }
+
+    ignore_difference {
+      group         = "apiextensions.k8s.io"
+      kind          = "CustomResourceDefinition"
+      json_pointers = ["/spec/preserveUnknownFields"]
+    }
   }
 
   depends_on = [argocd_project.projects["longhorn"]]
