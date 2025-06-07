@@ -47,7 +47,8 @@ locals {
       namespace   = "database"
       source_repos = [
         argocd_repository.repos["github_gitops"].repo,
-        argocd_repository.repos["bitnami_helm"].repo
+        argocd_repository.repos["bitnami_helm"].repo,
+        argocd_repository.repos["runix_helm"].repo
       ]
     },
     registry = {
@@ -124,6 +125,11 @@ locals {
       name       = "Longhorn"
       type       = "helm"
       url        = "https://charts.longhorn.io"
+    }
+    runix_helm = {
+      name       = "Runix"
+      type       = "helm"
+      url        = "https://helm.runix.net"
     }
   }
 }
