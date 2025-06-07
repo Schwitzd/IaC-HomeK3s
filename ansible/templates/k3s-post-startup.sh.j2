@@ -11,6 +11,9 @@ log() {
   echo "[$ts] $*" | tee -a /var/log/k3s-post-startup.log
 }
 
+log "====================[ STARTUP START ]===================="
+log "  Node: $NODE_NAME  |  Role: {{ role }}"
+
 {% if role == "worker" %}
 # --- WORKER: Wait ensure control-plane node is ready ---
 log "[POST-STARTUP] Worker node detected, waiting 8 seconds for control-plane to be ready..."
@@ -34,3 +37,5 @@ for entry in $ARGOCD_APPSET; do
   $KUBECTL -n "$ns" scale statefulsets "$name" --replicas=1
 done
 {% endif %}
+
+log "===================[ STARTUP COMPLETE ]==================="

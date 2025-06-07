@@ -15,6 +15,9 @@ LOCK_NAMESPACE="kube-system"
 LOCK_NAME="shutdown-lock"
 KUBECTL="/usr/local/bin/kubectl"
 
+log "====================[ SHUTDOWN START ]===================="
+log "  Node: $NODE_NAME  |  Role: {{ role }}"
+
 {% if role == "worker" %}
 # Wait 5 seconds for worker nodes
 log "[INFO] Worker node detected, waiting 10 seconds before proceeding..."
@@ -145,5 +148,6 @@ fi
 {% endif %}
 
 log "[SHUTDOWN] Powering off node"
+log "===================[ SHUTDOWN COMPLETE ]==================="
 sudo shutdown -h now
 exit 0
