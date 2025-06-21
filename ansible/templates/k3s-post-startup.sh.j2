@@ -16,7 +16,7 @@ log "  Node: $NODE_NAME  |  Role: {{ role }}"
 
 {% if role == "worker" %}
 # --- WORKER: Wait ensure control-plane node is ready ---
-log "[POST-STARTUP] Worker node detected, waiting 8 seconds for control-plane to be ready..."
+log "[POST-STARTUP] Worker node detected, waiting 30 seconds for control-plane to be ready..."
 sleep 30
 {% endif %}
 
@@ -32,7 +32,6 @@ ARGOCD_APPSET=$($KUBECTL get statefulsets -A -l app.kubernetes.io/name=argocd-ap
 for entry in $ARGOCD_APPSET; do
   ns=$(echo "$entry" | cut -d';' -f1)
   name=$(echo "$entry" | cut -d';' -f2)
-  # You can change "1" below to your desired replica count
   log "  Scaling ApplicationSet controller $name in namespace $ns to 1 replica"
   $KUBECTL -n "$ns" scale statefulsets "$name" --replicas=1
 done
