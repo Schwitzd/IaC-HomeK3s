@@ -168,6 +168,7 @@ This project implements a **role-aware, safe power cycle workflow** for the k3s 
 
 - **Node Drain & Poweroff:**
 
+  - A custom taint (`dns-unready=true:NoSchedule`) is applied to each node before shutdown. This prevents DNS-dependent workloads (like Longhorn) from being scheduled prematurely on the next boot.
   - Each node is cordoned and drained using Kubernetes to safely evict pods.
   - The appropriate k3s service (`k3s` for control-plane, `k3s-agent` for workers) is stopped.
   - Finally, the node is powered off.
@@ -183,8 +184,8 @@ flowchart TD
   C --> G[Scale down ArgoCD Application Controller & all Longhorn workloads]
   G --> H[Wait for:<br>- Longhorn pods terminated<br>- Longhorn volumes detached]
   H --> I[Remove shutdown lock ConfigMap]
-  F & I --> J[Node Drain & Poweroff]
-  J --> K[Cordon and drain node]
+  F & I --> J1[Apply dns-unready taint to the node]
+  J1 --> K[Cordon and drain node]
   K --> L[Stop k3s or k3s-agent service]
   L --> M[Power off node]
 ```
@@ -194,9 +195,40 @@ flowchart TD
 
 ### Startup
 
-Startup process is much simpler: the `k3s-post-startup` service automatically uncordons the node, restoring it to normal scheduling. On the control-plane node, the service also scales up the **ArgoCD Application Controller**, enabling ArgoCD to reconcile and restore all Deployments and StatefulSets that were previously scaled down for a safe Longhorn shutdown.
+The startup process is coordinated by the `k3s-post-startup` systemd service, which ensures that workloads are scheduled only after the cluster is fully ready.
 
-> The entire post startup process is orchestrated by the script:
+- **Startup Coordination:**
+
+  - All nodes boot with the custom taint `dns-unready=true:NoSchedule`, applied during shutdown to block early workload scheduling.
+  - CoreDNS is configured to tolerate this taint and is allowed to start immediately.
+
+- **DNS Readiness & Workload Restoration:**
+
+  - The `k3s-post-startup` script waits until all CoreDNS pods are marked `Ready`.
+  - Once DNS is confirmed operational:
+
+    - The taint is removed from the current node.
+    - The node is uncordoned, enabling workload scheduling.
+
+- **Control-plane logic:**
+
+  - On the control-plane node, the script scales the **ArgoCD Application Controller** back up, allowing reconciliation of all previously scaled-down workloads.
+
+```mermaid
+flowchart TD
+  S1[Startup Process]
+  S2[Node is tainted: dns-unready]
+  S3[CoreDNS tolerates taint and starts]
+  S4[Wait until CoreDNS is Ready]
+  S5[Remove taint from node]
+  S6[Uncordon node]
+  S7[Control-plane: scale up ArgoCD App Controller]
+  S8[Workloads are reconciled and resumed]
+
+  S1 --> S2 --> S3 --> S4 --> S5 --> S6 --> S7 --> S8
+```
+
+> The entire startup process is orchestrated by the script:
 > `/usr/local/bin/k3s-post-startup.sh`
 
 ## Why Share?
