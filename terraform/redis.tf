@@ -29,7 +29,7 @@ resource "argocd_application" "redis" {
     source {
       repo_url        = "registry-1.docker.io/bitnamicharts"
       chart           = "redis"
-      target_revision = "21.1.6"
+      target_revision = "21.2.0"
 
       helm {
         value_files = ["$values/redis/values.yaml"]
