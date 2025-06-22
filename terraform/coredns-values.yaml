@@ -1,0 +1,17 @@
+isClusterService: true
+
+service:
+  enabled: true
+  type: ClusterIP
+  ipFamilyPolicy: PreferDualStack
+  clusterIP: ${coredns_ipv4}
+  clusterIPs:
+    - ${coredns_ipv4}
+    - ${coredns_ipv6}
+  name: kube-dns
+
+tolerations:
+  - key: dns-unready
+    operator: Equal
+    value: "true"
+    effect: NoSchedule

@@ -68,6 +68,16 @@ A more robust secret management system like Vault is on the roadmap.
 This section outlines the recommended order to deploy the **core services** into K3s cluster.  
 Following this sequence ensures proper service dependencies and seamless integration between networking, ingress, and TLS management components.
 
+## CoreDNS
+
+CoreDNS is the internal DNS server for service discovery and cluster DNS resolution in K3s. It is automatically deployed by K3s during cluster installation. However, this deployment method has limitations regarding service customization. The complex logic I developed to shut down or restart the cluster requires adding a toleration to CoreDNS. For this reason, I opted to install CoreDNS with the official Helm chart rather than with the K3s installation script.
+
+To deploy CoreDNS:
+
+```sh
+terraform apply --var-file=variables.tfvars --target=argocd_application.coredns
+```
+
 ### Certificates
 
 To manage TLS certificates in the cluster, we use **Cert-Manager** with a **DNS-01 challenge**.

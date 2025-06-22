@@ -72,7 +72,6 @@ while $KUBECTL get pods --all-namespaces -l storage=longhorn 2>/dev/null | grep 
 done
 
 log "[SHUTDOWN] All storage=longhorn pods terminated."
-
 log "[SHUTDOWN] Waiting for all Longhorn volumes to be detached from all nodes..."
 
 while true; do
@@ -85,7 +84,6 @@ while true; do
 done
 
 log "[SHUTDOWN] All Longhorn volumes detached from all nodes."
-
 
 log "[SHUTDOWN] Removing shutdown lock ConfigMap $LOCK_NAME in namespace $LOCK_NAMESPACE..."
 $KUBECTL -n "$LOCK_NAMESPACE" delete configmap "$LOCK_NAME" --ignore-not-found
@@ -119,6 +117,8 @@ while true; do
   fi
 done
 {% endif %}
+log "[SHUTDOWN] Tainting node to block early workload startup"
+$KUBECTL taint nodes "$NODE_NAME" dns-unready=true:NoSchedule --overwrite || true
 
 log "[SHUTDOWN] Cordoning $NODE_NAME"
 $KUBECTL cordon "$NODE_NAME" || true
