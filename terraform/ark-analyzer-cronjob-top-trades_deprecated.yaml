@@ -1,0 +1,70 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: ark-analyzer-top-trades
+  namespace: ${namespace}
+  labels:
+    app: ark-analyzer
+spec:
+  schedule: "15 6 * * 4"  # Runs every Thursday at 06:10 UTC
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      ttlSecondsAfterFinished: 259200  # 72 hours
+      backoffLimit: 2
+      template:
+        metadata:
+          labels:
+            app: ark-analyzer
+        spec:
+          restartPolicy: Never
+          containers:
+            - name: ark-analyzer
+              image: ${image}
+              imagePullPolicy: IfNotPresent
+              command: ["python", "-m", "ark_analyzer.main"]
+              args: ["--task", "top_trades"]
+              env:
+                - name: TO_EMAILS
+                  valueFrom:
+                    secretKeyRef:
+                      name: ark-analyzer-secret
+                      key: TO_EMAILS
+                - name: MAILER_API_URL
+                  valueFrom:
+                    secretKeyRef:
+                      name: ark-analyzer-secret
+                      key: MAILER_API_URL
+                - name: POSTGRES_DB
+                  valueFrom:
+                    secretKeyRef:
+                      name: ark-analyzer-secret
+                      key: POSTGRES_DB
+                - name: POSTGRES_USER
+                  valueFrom:
+                    secretKeyRef:
+                      name: ark-analyzer-secret
+                      key: POSTGRES_USER
+                - name: POSTGRES_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: ark-analyzer-secret
+                      key: POSTGRES_PASSWORD
+                - name: POSTGRES_HOST
+                  valueFrom:
+                    secretKeyRef:
+                      name: ark-analyzer-secret
+                      key: POSTGRES_HOST
+                - name: POSTGRES_PORT
+                  valueFrom:
+                    secretKeyRef:
+                      name: ark-analyzer-secret
+                      key: POSTGRES_PORT
+              resources:
+                requests:
+                  cpu: "50m"
+                  memory: "128Mi"
+                limits:
+                  cpu: "150m"
+                  memory: "256Mi"

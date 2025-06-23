@@ -1,21 +1,16 @@
-resource "kubernetes_manifest" "ark_analyzer_cronjob_first_time_buys" {
-  manifest = yamldecode(templatefile("${path.module}/ark-analyzer-cronjob-first-time-buys.yaml", {
-    namespace = kubernetes_namespace.namespaces["stocks"].metadata[0].name
-    image     = "harbor.schwitzd.me/library/ark-analyzer:0.2.1"
-  }))
-
-  depends_on = [ kubernetes_secret.ark_analyzer_secret ]
+# ark-analyzer locals
+locals {
+  ark_analyzer_jobs = {
+    "first-time-buys" = {
+      values_file = "$values/ark-analyzer/values-first-time-buys.yaml"
+    }
+    "top-trades" = {
+      values_file = "$values/ark-analyzer/values-top-trades.yaml"
+    }
+  }
 }
 
-resource "kubernetes_manifest" "ark_analyzer_cronjob_top_trades" {
-  manifest = yamldecode(templatefile("${path.module}/ark-analyzer-cronjob-top-trades.yaml", {
-    namespace = kubernetes_namespace.namespaces["stocks"].metadata[0].name
-    image     = "harbor.schwitzd.me/library/ark-analyzer:0.2.1"
-  }))
-
-  depends_on = [ kubernetes_secret.ark_analyzer_secret ]
-}
-
+# ark-analyzer secret
 resource "kubernetes_secret" "ark_analyzer_secret" {
   metadata {
     name      = "ark-analyzer-secret"
@@ -34,3 +29,67 @@ resource "kubernetes_secret" "ark_analyzer_secret" {
 
   type = "Opaque"
 }
+
+# ark-analyzer deployment
+resource "argocd_application" "ark_analyzer" {
+  for_each = local.ark_analyzer_jobs
+
+  metadata {
+    name      = "ark-analyzer-${each.key}"
+    namespace = "infrastructure"
+  }
+  spec {
+    project = "stocks"
+    source {
+      repo_url        = argocd_repository.repos["github_gitops"].repo
+      target_revision = "HEAD"
+      path            = "ark-analyzer"
+      helm {
+        value_files = [each.value.values_file]
+      }
+    }
+    destination {
+      server    = "https://kubernetes.default.svc"
+      namespace = "stocks"
+    }
+    sync_policy {
+      automated {
+        prune       = true
+        self_heal   = true
+        allow_empty = false
+      }
+      retry {
+        limit = 5
+        backoff {
+          duration     = "30s"
+          max_duration = "2m"
+          factor       = 2
+        }
+      }
+    }
+  }
+  depends_on = [
+    kubernetes_secret.ark_analyzer_secret,
+    argocd_project.projects["stocks"]
+  ]
+}
+
+## Deprecated
+#resource "kubernetes_manifest" "ark_analyzer_cronjob_first_time_buys" {
+#  manifest = yamldecode(templatefile("${path.module}/ark-analyzer-cronjob-first-time-buys.yaml", {
+#    namespace = kubernetes_namespace.namespaces["stocks"].metadata[0].name
+#    image     = "harbor.schwitzd.me/library/ark-analyzer:0.2.1"
+#  }))
+#
+#  depends_on = [ kubernetes_secret.ark_analyzer_secret ]
+#}
+#
+#resource "kubernetes_manifest" "ark_analyzer_cronjob_top_trades" {
+#  manifest = yamldecode(templatefile("${path.module}/ark-analyzer-cronjob-top-trades.yaml", {
+#    namespace = kubernetes_namespace.namespaces["stocks"].metadata[0].name
+#    image     = "harbor.schwitzd.me/library/ark-analyzer:0.2.1"
+#  }))
+#
+#  depends_on = [ kubernetes_secret.ark_analyzer_secret ]
+#}
+
