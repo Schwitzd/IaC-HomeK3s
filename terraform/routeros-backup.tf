@@ -2,19 +2,6 @@ data "vault_generic_secret" "routeros_backup" {
   path = "${var.vault_name}/routeros-backup"
 }
 
-resource "kubernetes_manifest" "routeros_backup_cronjob" {
-  manifest = yamldecode(templatefile("${path.module}/routeros-backup-cronjob.yaml", {
-    namespace = kubernetes_namespace.namespaces["infrastructure"].metadata[0].name
-    image     = "harbor.schwitzd.me/library/routeros-backup:1.4.1"
-  }))
-
-  depends_on = [
-    kubernetes_secret.routeros_backup_secret,
-    kubernetes_secret.routeros_backup_ssh_key
-  ]
-}
-
-
 resource "kubernetes_secret" "routeros_backup_secret" {
   metadata {
     name      = "routeros-backup-secret"
@@ -51,3 +38,62 @@ resource "kubernetes_secret" "routeros_backup_ssh_key" {
 
   type = "Opaque"
 }
+
+# routeros-backup deployment
+resource "argocd_application" "routeros_backup" {
+  metadata {
+    name      = "routeros-backup"
+    namespace = "infrastructure"
+  }
+
+  spec {
+    project = "infrastructure"
+    source {
+      repo_url        = argocd_repository.repos["github_gitops"].repo
+      target_revision = "HEAD"
+      path            = "routeros-backup"
+      helm {
+        value_files = ["$values/routeros-backup/values.yaml"]
+      }
+    }
+    destination {
+      server    = "https://kubernetes.default.svc"
+      namespace = "infrastructure"
+    }
+    sync_policy {
+      automated {
+        prune       = true
+        self_heal   = true
+        allow_empty = false
+      }
+      retry {
+        limit = 5
+        backoff {
+          duration     = "30s"
+          max_duration = "2m"
+          factor       = 2
+        }
+      }
+    }
+  }
+
+  depends_on = [
+    kubernetes_secret.routeros_backup_secret,
+    kubernetes_secret.routeros_backup_ssh_key,
+    argocd_project.projects["infrastructure"]
+  ]
+}
+
+
+## Deprecated
+#resource "kubernetes_manifest" "routeros_backup_cronjob" {
+#  manifest = yamldecode(templatefile("${path.module}/routeros-backup-cronjob.yaml", {
+#    namespace = kubernetes_namespace.namespaces["infrastructure"].metadata[0].name
+#    image     = "harbor.schwitzd.me/library/routeros-backup:1.4.1"
+#  }))
+#
+#  depends_on = [
+#    kubernetes_secret.routeros_backup_secret,
+#    kubernetes_secret.routeros_backup_ssh_key
+#  ]
+#}
