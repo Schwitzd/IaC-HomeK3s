@@ -3,7 +3,7 @@ data "vault_generic_secret" "pgadmin" {
   path = "${var.vault_name}/pgadmin"
 }
 
-# Pgadmin Secret
+# Pgadmin secret
 resource "kubernetes_secret" "pgadmin_secret" {
   metadata {
     name      = "pgadmin-secret"
@@ -17,7 +17,7 @@ resource "kubernetes_secret" "pgadmin_secret" {
   type = "Opaque"
 }
 
-# Pgadmin Deployment 
+# Pgadmin deployment 
 resource "argocd_application" "pgadmin" {
   metadata {
     name      = "pgadmin"

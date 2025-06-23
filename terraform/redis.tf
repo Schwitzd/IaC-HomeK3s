@@ -1,7 +1,9 @@
+# Vault path
 data "vault_generic_secret" "redis" {
   path = "${var.vault_name}/redis"
 }
 
+# Redis secret
 resource "kubernetes_secret" "redis_auth" {
   metadata {
     name      = "redis-secret"
@@ -15,6 +17,7 @@ resource "kubernetes_secret" "redis_auth" {
   type = "Opaque"
 }
 
+# Redis deployment
 resource "argocd_application" "redis" {
   metadata {
     name      = "redis"
@@ -65,7 +68,10 @@ resource "argocd_application" "redis" {
     }
   }
 
-  depends_on = [argocd_project.projects["database"]]
+  depends_on = [
+    kubernetes_secret.redis_auth,
+    argocd_project.projects["database"]
+  ]
 }
 
 

@@ -3,7 +3,7 @@ data "vault_generic_secret" "postgresql" {
   path = "${var.vault_name}/postgresql"
 }
 
-# PostgreSQL Secrets
+# PostgreSQL secret
 resource "kubernetes_secret" "postgresql_auth" {
   metadata {
     name      = "postgresql-auth"
@@ -19,7 +19,7 @@ resource "kubernetes_secret" "postgresql_auth" {
   type = "Opaque"
 }
 
-# PostgreSQL Deployment
+# PostgreSQL deployment
 resource "argocd_application" "postgresql" {
   metadata {
     name      = "postgresql"
