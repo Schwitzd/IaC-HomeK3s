@@ -1,7 +1,9 @@
+# Vault path
 data "vault_generic_secret" "harbor" {
   path = "${var.vault_name}/harbor"
 }
 
+# Harbor secret
 resource "kubernetes_secret" "harbor_external_db" {
   metadata {
     name      = "harbor-db-creds"
@@ -9,33 +11,44 @@ resource "kubernetes_secret" "harbor_external_db" {
   }
 
   data = {
-    db-user = data.vault_generic_secret.harbor.data["db_username"]
     db-password = data.vault_generic_secret.harbor.data["db_password"]
   }
 
   type = "Opaque"
 }
 
+resource "kubernetes_secret" "harbor_external_redis" {
+  metadata {
+    name      = "harbor-redis-creds"
+    namespace = kubernetes_namespace.namespaces["registry"].metadata[0].name
+  }
+
+  data = {
+    redis-password = data.vault_generic_secret.redis.data["password"]
+  }
+
+  type = "Opaque"
+}
+
+# Harbor deployment
 resource "argocd_application" "harbor" {
   metadata {
     name      = "harbor"
     namespace = "infrastructure"
   }
+
   spec {
     project = "registry"
     source {
       repo_url        = "registry-1.docker.io/bitnamicharts"
       chart           = "harbor"
-      target_revision = "25.0.2"
+      target_revision = "26.7.6"
+
       helm {
         value_files = ["$values/harbor/values.yaml"]
         parameter {
           name  = "externalDatabase.user"
           value = data.vault_generic_secret.harbor.data["db_username"]
-        }
-        parameter {
-          name  = "externalDatabase.password"
-          value = data.vault_generic_secret.harbor.data["db_password"]
         }
         parameter {
           name  = "externalRedis.password"
@@ -73,7 +86,11 @@ resource "argocd_application" "harbor" {
     }
   }
 
-  depends_on = [ kubernetes_secret.harbor_external_db, argocd_project.projects["registry"] ]
+  depends_on = [
+    argocd_project.projects["registry"],
+    kubernetes_secret.harbor_external_db,
+    kubernetes_secret.harbor_external_redis
+  ]
 }
 
 ## Deprecated
