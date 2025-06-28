@@ -42,9 +42,44 @@ resource "helm_release" "argocd_image_updater" {
 # ArgoCD projects
 locals {
   argocd_projects = {
+    monitoring = {
+      description = "Monitoring, alerting, and observability services for the cluster"
+      namespaces  = ["monitoring"]
+      source_repos = [
+        argocd_repository.repos["github_gitops"].repo,
+        argocd_repository.repos["prometheus_helm"].repo
+      ]
+    },
+    infrastructure = {
+      description = "Workloads for all infrastructure services"
+      namespaces  = ["infrastructure", "cattle-system"]
+      source_repos = [
+        argocd_repository.repos["github_gitops"].repo,
+        argocd_repository.repos["rancher_helm"].repo
+      ]
+      cluster_resource_whitelist = [
+        { group = "rbac.authorization.k8s.io", kind = "ClusterRole" },
+        { group = "rbac.authorization.k8s.io", kind = "ClusterRoleBinding" },
+        { group = "scheduling.k8s.io", kind = "PriorityClass" }
+      ]
+    },
+    stocks = {
+      description = "Workloads for all stock analysis, scraping, and trading-related services"
+      namespaces  = ["stocks"]
+      source_repos = [
+        argocd_repository.repos["github_gitops"].repo
+      ]
+    },
+    services = {
+      description = "Reusable helper services and supporting workflows for the cluster"
+      namespaces  = ["services"]
+      source_repos = [
+        argocd_repository.repos["github_gitops"].repo
+      ]
+    },
     database = {
-      description = "Workloads for Redis, PostgreSQL, etc."
-      namespace   = "database"
+      description = "Workloads for database services and supporting resources"
+      namespaces  = ["database"]
       source_repos = [
         argocd_repository.repos["github_gitops"].repo,
         argocd_repository.repos["bitnami_helm"].repo,
@@ -52,25 +87,25 @@ locals {
       ]
     },
     registry = {
-      description = "Workloads for Harbor"
-      namespace   = "registry"
+      description = "Workloads for Harbor registry"
+      namespaces  = ["registry"]
       source_repos = [
         argocd_repository.repos["github_gitops"].repo,
         argocd_repository.repos["bitnami_helm"].repo
       ]
     },
     longhorn = {
-      description  = "Workloads for Longhorn"
-      namespace    = "longhorn-system"
+      description = "Workloads for Longhorn"
+      namespaces  = ["longhorn-system"]
       source_repos = [
         argocd_repository.repos["github_gitops"].repo,
         argocd_repository.repos["longhorn_helm"].repo
       ]
       cluster_resource_whitelist = [
-        { group = "apiextensions.k8s.io",      kind = "CustomResourceDefinition" },
+        { group = "apiextensions.k8s.io", kind = "CustomResourceDefinition" },
         { group = "rbac.authorization.k8s.io", kind = "ClusterRole" },
         { group = "rbac.authorization.k8s.io", kind = "ClusterRoleBinding" },
-        { group = "scheduling.k8s.io",         kind = "PriorityClass" }
+        { group = "scheduling.k8s.io", kind = "PriorityClass" }
       ]
     }
   }
@@ -88,9 +123,12 @@ resource "argocd_project" "projects" {
     description  = each.value.description
     source_repos = each.value.source_repos
 
-    destination {
-      server    = "https://kubernetes.default.svc"
-      namespace = each.value.namespace
+    dynamic "destination" {
+      for_each = each.value.namespaces
+      content {
+        server    = "https://kubernetes.default.svc"
+        namespace = destination.value
+      }
     }
 
     dynamic "cluster_resource_whitelist" {
@@ -122,14 +160,24 @@ locals {
       enable_oci = true
     }
     longhorn_helm = {
-      name       = "Longhorn"
-      type       = "helm"
-      url        = "https://charts.longhorn.io"
+      name = "Longhorn"
+      type = "helm"
+      url  = "https://charts.longhorn.io"
     }
     runix_helm = {
-      name       = "Runix"
-      type       = "helm"
-      url        = "https://helm.runix.net"
+      name = "Runix"
+      type = "helm"
+      url  = "https://helm.runix.net"
+    }
+    rancher_helm = {
+      name = "Rancher"
+      type = "helm"
+      url  = "https://releases.rancher.com/server-charts/latest"
+    }
+    prometheus_helm = {
+      name = "Prometheus"
+      type = "helm"
+      url  = "https://prometheus-community.github.io/helm-charts"
     }
   }
 }
