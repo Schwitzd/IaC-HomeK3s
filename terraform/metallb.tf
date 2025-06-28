@@ -3,7 +3,7 @@ resource "helm_release" "metallb" {
   namespace       = kubernetes_namespace.namespaces["infrastructure"].metadata[0].name
   chart           = "metallb"
   repository      = "https://metallb.github.io/metallb"
-  version         = "0.14.9"
+  version         = "0.15.2"
   cleanup_on_fail = true
 
   values = [

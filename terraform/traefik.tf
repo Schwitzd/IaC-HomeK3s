@@ -3,7 +3,7 @@ resource "helm_release" "traefik" {
   namespace       = kubernetes_namespace.namespaces["infrastructure"].metadata[0].name
   chart           = "traefik"
   repository      = "https://traefik.github.io/charts"
-  version         = "34.4.1"
+  version         = "36.2.0"
   cleanup_on_fail = true
 
   values = [
