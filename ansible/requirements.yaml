@@ -3,3 +3,6 @@ collections:
   - name: https://github.com/Schwitzd/me.ansible_collection.git
     type: git
     version: main
+
+roles:
+  - name: githubixx.cilium_cli

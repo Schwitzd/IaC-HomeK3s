@@ -4,130 +4,85 @@
   remote_user: k3s
   become: true
 
-  vars:
-    btrfs_disk_device: /dev/nvme0n1
-    btrfs_mount_point: /mnt/nvme0
+  roles:
+    - role: schwitzd.collection.btrfs
+      vars:
+        btrfs_device: /dev/nvme0n1
+        btrfs_mount: /mnt/k3s_storage
+        btrfs_opts: defaults,noatime,compress=zstd:3,ssd,discard=async,space_cache=v2,autodefrag,noexec,nodev,nosuid
+        btrfs_partition_overwrite: true
+      tags: storage
+
+    - role: schwitzd.collection.sshd_hardening
+      vars:
+        sshd_hardening_allowed_users:
+          - k3s
+      tags: sshd
+
+    - role: githubixx.cilium_cli
+      vars:
+        cilium_cli_version: "0.18.4"
+        cilium_cli_arch: "arm64"
+      when: role == "control-plane"
+      tags: k3s-cilium
 
   tasks:
-    # Install Btrfs Tools
-    - name: Install btrfs-progs
-      ansible.builtin.package:
-        name: btrfs-progs
-        state: present
-      tags: storage
-
-    # Install jq
-    - name: Ensure jq is installed
-      ansible.builtin.package:
-        name: jq
-        state: present
-      tags: shutdown
-
-    # Create a new GPT partition table
-    - name: Create primary partition for Btrfs
-      community.general.parted:
-        device: "{{ btrfs_disk_device }}"
-        number: 1
-        part_start: 1MiB
-        part_end: 100%
-        fs_type: btrfs
-        state: present
-      tags: storage
-
-    # Create a single primary partition that spans the whole disk
-    - name: Create primary partition for Btrfs
-      community.general.parted:
-        device: "{{ btrfs_disk_device }}"
-        number: 1
-        part_start: 1MiB
-        part_end: 100%
-        fs_type: btrfs
-        state: present
-      tags: storage
-
-    # Format the partition with Btrfs
-    - name: Format partition as Btrfs
-      community.general.filesystem:
-        fstype: btrfs
-        dev: "{{ btrfs_disk_device }}p1"
+    - name: Download Helm Apt GPG key
+      ansible.builtin.get_url:
+        url: https://baltocdn.com/helm/signing.asc
+        dest: /tmp/helm.gpg
+        mode: '0644'
         force: true
-      tags: storage
+      tags: apt
 
-    # Retrieve the UUID of the newly created Btrfs partition
-    - name: Retrieve UUID of Btrfs partition
-      ansible.builtin.command: "blkid -s UUID -o value {{ btrfs_disk_device }}p1"
-      register: btrfs_uuid
-      changed_when: false
-      tags: storage
+    - name: Download Kubernetes Apt GPG key
+      ansible.builtin.get_url:
+        url: https://pkgs.k8s.io/core:/stable:/v1.33/deb/Release.key
+        dest: /tmp/kubernetes-apt-keyring.gpg
+        mode: '0644'
+        force: true
+      tags: apt
 
-    # Ensure that the UUID was successfully retrieved
-    - name: Ensure UUID was retrieved
-      ansible.builtin.fail:
-        msg: "Failed to retrieve UUID for {{ btrfs_disk_device }}p1. Make sure the partition is formatted as Btrfs."
-      when: btrfs_uuid.stdout == ""
-      tags: storage
+    - name: Dearmor the Helm signing key file
+      ansible.builtin.shell: gpg --batch --dearmor -o /etc/apt/keyrings/helm.gpg /tmp/helm.gpg
+      args:
+        creates: /etc/apt/keyrings/helm.gpg
+      tags: apt
 
-    # Create the target mount point directory
-    - name: Create mount point {{ btrfs_mount_point }}
-      ansible.builtin.file:
-        path: "{{ btrfs_mount_point }}"
-        state: directory
-        mode: '0755'
-      tags: storage
+    - name: Dearmor the Kubernetes signing key file
+      ansible.builtin.shell: gpg --batch --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg /tmp/kubernetes-apt-keyring.gpg
+      args:
+        creates: /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+      tags: apt
 
-    # Mount the Btrfs partition using its UUID
-    - name: Mount Btrfs partition at {{ btrfs_mount_point }}
-      ansible.posix.mount:
-        path: "{{ btrfs_mount_point }}"
-        src: "UUID={{ btrfs_uuid.stdout }}"
-        fstype: btrfs
-        opts: rw,nosuid,nodev,noexec,noatime,nodiratime,compress=zstd:3,ssd,discard=async,space_cache=v2,autodefrag,subvolid=5,subvol=/
-        state: mounted
-      tags: storage
-
-    # Ensure a persistent mount by updating /etc/fstab with the UUID
-    - name: Ensure UUID-based entry in /etc/fstab
-      ansible.builtin.lineinfile:
-        path: /etc/fstab
-        line: "UUID={{ btrfs_uuid.stdout }} {{ btrfs_mount_point }} btrfs rw,nosuid,nodev,noexec,noatime,nodiratime,compress=zstd:3,ssd,discard=async,space_cache=v2,autodefrag,subvolid=5,subvol=/ 0 0"
-        state: present
-      tags: storage
-
-    # Enable cgroups for K3s
-    - name: Ensure cgroups are enabled in cmdline.txt
-      ansible.builtin.lineinfile:
-        path: /boot/firmware/cmdline.txt
-        backrefs: true
-        regexp: '^((?!cgroup_memory=1).*)$'
-        line: '\1 cgroup_memory=1 cgroup_enable=memory'
-        state: present
-      notify: Reboot system (cgroups change requires reboot)
-      tags: cgroups
-
-    - name: Set permissions on kubeconfig so root can read it
-      ansible.builtin.file:
-        path: /home/k3s/.kube/config
-        mode: '0640'
-        owner: k3s
-        group: root
-      tags: kubeconfig, permissions
-
-    # Longhorn folder
-    - name: Create Longhorn data folder under {{ btrfs_mount_point }}
-      ansible.builtin.file:
-        path: "{{ btrfs_mount_point }}/longhorn"
-        state: directory
-        mode: '0755'
-        owner: root
-        group: root
-      tags: k3s
-
-    # Longhorn requirements
-    - name: Install open-iscsi for Longhorn
-      ansible.builtin.apt:
-        name: open-iscsi
+    - name: Add Helm APT repository
+      ansible.builtin.apt_repository:
+        repo: "deb [arch=arm64 signed-by=/etc/apt/keyrings/helm.gpg] https://baltocdn.com/helm/stable/debian/ all main"
+        filename: helm-stable-debian
         state: present
         update_cache: true
+      tags: apt
+
+    - name: Add Kubernetes apt repository
+      ansible.builtin.apt_repository:
+        repo: "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.33/deb/ /"
+        filename: kubernetes
+        state: present
+        update_cache: true
+      tags: apt
+
+    - name: Ensure required packages are installed
+      ansible.builtin.apt:
+        name:
+          - open-iscsi
+          - jq
+          - apt-transport-https
+          - helm
+          - kubectl
+          - dnsutils
+        state: present
+        update_cache: true
+      tags: apt
 
     # Configure static IPv6 networking using NetworkManager via nmcli
     - name: Set IPv6 to manual and assign static address
@@ -140,46 +95,8 @@
         gw6: "{{ ipv6_gateway }}"
         dns6: "{{ ipv6_dns }}"
         state: present
-      tags: network, ipv6
-
-    - name: Restart NetworkManager to apply changes
-      ansible.builtin.systemd:
-        name: NetworkManager
-        state: restarted
-      tags: network, ipv6
-
-    # Configure K3s Garbage Collection Settings
-    - name: Ensure K3s environment file exists with strict permissions
-      ansible.builtin.file:
-        path: /etc/systemd/system/k3s.service.env
-        state: touch
-        mode: '0600'
-        owner: root
-        group: root
-      tags: k3s
-
-    - name: Set K3s garbage collection environment variables
-      ansible.builtin.lineinfile:
-        path: /etc/systemd/system/k3s.service.env
-        regexp: "^{{ item.key }}="
-        line: "{{ item.key }}={{ item.value }}"
-        create: true
-      loop:
-        - { key: "K3S_GC_IMAGE_AGE", value: "72h" }
-        - { key: "K3S_GC_IMAGE_CLEANUP_PERIOD", value: "1d" }
-      when: master_node | bool
-      tags: k3s
-
-    - name: Reload systemd daemon
-      ansible.builtin.systemd:
-        daemon_reload: true
-      tags: systemd, k3s
-
-    - name: Restart K3s service
-      ansible.builtin.systemd:
-        name: k3s
-        state: restarted
-      tags: systemd, k3s
+      notify: Restart NetworkManager
+      tags: networking
 
     # Enable IPv6 Forwarding
     - name: Create a sysctl config file for IPv6 forwarding
@@ -190,10 +107,65 @@
         group: root
         mode: "0644"
       notify: Reload sysctl
-      tags: systemd, ipv6
+      tags: networking
+
+    # Enable cgroups for K3s
+    - name: Ensure cgroups are enabled in cmdline.txt
+      ansible.builtin.lineinfile:
+        path: /boot/firmware/cmdline.txt
+        backrefs: true
+        regexp: '^((?!cgroup_memory=1).*)$'
+        line: '\1 cgroup_memory=1 cgroup_enable=memory'
+        state: present
+      notify: Reboot system
+      tags: k3s-cgroup
+
+    # Longhorn folder
+    - name: Create Longhorn data folder under {{ btrfs_mount }}
+      ansible.builtin.file:
+        path: "{{ btrfs_mount }}/longhorn"
+        state: directory
+        mode: '0755'
+        owner: root
+        group: root
+      tags: k3s-longhorn
+
+    - name: Set permissions on kubeconfig so root can read it
+      ansible.builtin.file:
+        path: /home/k3s/.kube/config
+        mode: '0640'
+        owner: k3s
+        group: root
+      when: role == "control-plane"
+      tags: k3s-post
+
+    # Configure K3s Garbage Collection Settings
+    - name: Ensure K3s environment file exists with strict permissions
+      ansible.builtin.file:
+        path: /etc/systemd/system/k3s.service.env
+        state: touch
+        mode: '0600'
+        owner: root
+        group: root
+      when: role == "control-plane"
+      tags: k3s-post
+
+    - name: Set K3s garbage collection environment variables
+      ansible.builtin.lineinfile:
+        path: /etc/systemd/system/k3s.service.env
+        regexp: "^{{ item.key }}="
+        line: "{{ item.key }}={{ item.value }}"
+        create: true
+      loop:
+        - { key: "K3S_GC_IMAGE_AGE", value: "72h" }
+        - { key: "K3S_GC_IMAGE_CLEANUP_PERIOD", value: "1d" }
+      when: role == "control-plane"
+      notify:
+        - Reload systemd
+        - Restart K3s service
+      tags: k3s-post
 
     # Schedule Raspberry Pi Shutdown at 08:30 AM
-
     - name: Deploy graceful shutdown script
       ansible.builtin.template:
         src: k3s-graceful-shutdown.sh.j2
@@ -201,12 +173,12 @@
         owner: root
         group: root
         mode: '0755'
-      tags: shutdown
+      tags: shutdown-startup
 
     - name: Set K3s service name
       ansible.builtin.set_fact:
         k3s_service_name: "{{ 'k3s' if role == 'control-plane' else 'k3s-agent' }}"
-      tags: startup
+      tags: shutdown-startup
 
     - name: Schedule graceful cluster shutdown
       ansible.builtin.cron:
@@ -215,7 +187,7 @@
         hour: "9"
         job: "/usr/local/bin/k3s-graceful-shutdown.sh"
         user: root
-      tags: shutdown
+      tags: shutdown-startup
 
     - name: Deploy k3s-post-startup script
       ansible.builtin.template:
@@ -223,7 +195,7 @@
         dest: /usr/local/bin/k3s-post-startup.sh
         mode: "0755"
       notify: Reload systemd
-      tags: startup
+      tags: shutdown-startup
 
     - name: Deploy k3s-post-startup systemd unit
       ansible.builtin.template:
@@ -231,21 +203,32 @@
         dest: /etc/systemd/system/k3s-post-startup.service
         mode: "0644"
       notify: Reload systemd
-      tags: startup
+      tags: shutdown-startup
 
     - name: Enable k3s-post-startup service
       ansible.builtin.systemd:
         name: k3s-post-startup.service
         enabled: true
-      tags: startup
+      tags: shutdown-startup
 
   handlers:
-    - name: Reboot system (cgroups change requires reboot)
+    - name: Reboot system
       ansible.builtin.reboot:
 
     - name: Reload sysctl
       ansible.builtin.command: sysctl --system
+      changed_when: false
 
     - name: Reload systemd
       ansible.builtin.systemd:
         daemon_reload: true
+
+    - name: Restart K3s service
+      ansible.builtin.systemd:
+        name: k3s
+        state: restarted
+
+    - name: Restart NetworkManager
+      ansible.builtin.systemd:
+        name: NetworkManager
+        state: restarted
