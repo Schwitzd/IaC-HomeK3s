@@ -1,0 +1,31 @@
+kubeProxyReplacement: true
+
+l2announcements:
+  enabled: true
+
+ipv6:
+  enabled: false
+ipv6NativeRoutingCIDR: ${ipv6_native_routing_cidr}
+
+ipam:
+  mode: cluster-pool
+  operator:
+    clusterPoolIPv4PodCIDRList:
+      - ${cluster_ipv4_cidr}
+    clusterPoolIPv4MaskSize: 24
+    clusterPoolIPv6PodCIDRList:
+      - ${cluster_ipv6_cidr}
+    clusterPoolIPv6MaskSize: 120
+
+k8s:
+  requireIPv4PodCIDR: false
+  requireIPv6PodCIDR: false
+
+externalIPs:
+  enabled: true
+
+nodePort:
+  enabled: true
+
+bgpControlPlane:
+  enabled: false
