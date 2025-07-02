@@ -13,5 +13,8 @@ resource "helm_release" "traefik" {
     })))
   ]
 
-  depends_on = [ helm_release.metallb ]
+  depends_on = [ 
+    helm_release.cilium,
+    helm_release.cert_manager
+    ]
 }

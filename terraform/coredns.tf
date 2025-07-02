@@ -9,7 +9,7 @@ resource "helm_release" "coredns" {
   values = [
     yamlencode(yamldecode(templatefile("${path.module}/coredns-values.yaml", {
       coredns_ipv4 = "10.43.0.10"
-      coredns_ipv6 = "fd12:3456:789a:43::10"
+      coredns_ipv6 = "fd22:2025:6a6a:43::10"
     })))
   ]
 }
