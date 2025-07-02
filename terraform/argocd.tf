@@ -9,7 +9,7 @@ resource "helm_release" "argocd" {
   namespace       = kubernetes_namespace.namespaces["infrastructure"].metadata[0].name
   chart           = "argo-cd"
   repository      = "https://argoproj.github.io/argo-helm"
-  version         = "8.0.14"
+  version         = "8.1.2"
   cleanup_on_fail = true
 
   values = [
@@ -21,27 +21,41 @@ resource "helm_release" "argocd" {
 }
 
 # ArgoCD  Image Deployment
-resource "helm_release" "argocd_image_updater" {
-  name            = "argocd-image-updater"
-  namespace       = kubernetes_namespace.namespaces["infrastructure"].metadata[0].name
-  chart           = "argocd-image-updater"
-  repository      = "https://argoproj.github.io/argo-helm"
-  cleanup_on_fail = true
-
-  values = [
-    yamlencode(yamldecode(templatefile("${path.module}/argocd-image-updater-values.yaml", {
-      argocd_server_address = data.vault_generic_secret.argocd.data["hostname"]
-      harbor_api_url        = data.vault_generic_secret.harbor.data["externalURL"]
-      harbor_credential     = data.vault_generic_secret.argocd.data["harbor_credential"]
-    })))
-  ]
-
-  depends_on = [helm_release.argocd]
-}
+#resource "helm_release" "argocd_image_updater" {
+#  name            = "argocd-image-updater"
+#  namespace       = kubernetes_namespace.namespaces["infrastructure"].metadata[0].name
+#  chart           = "argocd-image-updater"
+#  repository      = "https://argoproj.github.io/argo-helm"
+#  cleanup_on_fail = true
+#
+#  values = [
+#    yamlencode(yamldecode(templatefile("${path.module}/argocd-image-updater-values.yaml", {
+#      argocd_server_address = data.vault_generic_secret.argocd.data["hostname"]
+#      harbor_api_url        = data.vault_generic_secret.harbor.data["externalURL"]
+#      harbor_credential     = data.vault_generic_secret.argocd.data["harbor_credential"]
+#    })))
+#  ]
+#
+#  depends_on = [helm_release.argocd]
+#}
 
 # ArgoCD projects
 locals {
   argocd_projects = {
+    kube-system = {
+      description = "Core Kubernetes system components and controllers managed by the cluster"
+      namespaces  = ["kube-system", "cilium-secrets"]
+      source_repos = [
+        argocd_repository.repos["github_gitops"].repo,
+        argocd_repository.repos["cilium_helm"].repo,
+        argocd_repository.repos["coredns_helm"].repo
+      ]
+      cluster_resource_whitelist = [
+        { group = "", kind = "Namespace" },
+        { group = "rbac.authorization.k8s.io", kind = "ClusterRole" },
+        { group = "rbac.authorization.k8s.io", kind = "ClusterRoleBinding" },
+      ]
+    },
     monitoring = {
       description = "Monitoring, alerting, and observability services for the cluster"
       namespaces  = ["monitoring"]
@@ -140,7 +154,10 @@ resource "argocd_project" "projects" {
     }
   }
 
-  depends_on = [argocd_repository.repos]
+  depends_on = [
+    helm_release.argocd,
+    argocd_repository.repos
+  ]
 }
 
 # ArgoCD Repositories
@@ -179,6 +196,16 @@ locals {
       type = "helm"
       url  = "https://prometheus-community.github.io/helm-charts"
     }
+    cilium_helm = {
+      name = "Cilium"
+      type = "helm"
+      url  = "https://helm.cilium.io"
+    }
+    coredns_helm = {
+      name = "CoreDNS"
+      type = "helm"
+      url  = "https://coredns.github.io/helm"
+    }
   }
 }
 
@@ -191,4 +218,8 @@ resource "argocd_repository" "repos" {
   enable_oci = lookup(each.value, "enable_oci", false)
   username   = lookup(each.value, "username", null)
   password   = lookup(each.value, "password", null)
+
+  depends_on = [
+    helm_release.argocd
+  ]
 }
