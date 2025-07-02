@@ -1,13 +1,6 @@
 # ark-analyzer locals
 locals {
-  ark_analyzer_jobs = {
-    "first-time-buys" = {
-      values_file = "$values/ark-analyzer/values-first-time-buys.yaml"
-    }
-    "top-trades" = {
-      values_file = "$values/ark-analyzer/values-top-trades.yaml"
-    }
-  }
+
 }
 
 # ark-analyzer secret
