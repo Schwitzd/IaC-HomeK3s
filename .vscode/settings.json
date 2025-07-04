@@ -2,5 +2,5 @@
     "yaml.schemas": {
         "https://raw.githubusercontent.com/ansible/ansible-lint/main/src/ansiblelint/schemas/ansible.json#/$defs/playbook": "file:///home/daniel/Github/IaC-k3s/ansible/k3s.yaml"
     },
-    "ansible.python.interpreterPath": "/home/daniel/Github/IaC-k3s/venv/bin/python"
+    "ansible.python.interpreterPath": "/home/daniel/Github/IaC-HomeK3s/venv/bin/python"
 }
