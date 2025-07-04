@@ -45,18 +45,26 @@ resource "kubernetes_manifest" "le_clusterissuer" {
       }
     }
   }
-  depends_on = [helm_release.cert_manager, kubernetes_secret.cloudflare_api_token]
+
+depends_on = [
+  helm_release.cert_manager,
+  kubernetes_secret.cloudflare_api_token
+]
 }
 
 # cert-manager
 resource "helm_release" "cert_manager" {
-  name       = "cert-manager"
-  namespace  = kubernetes_namespace.namespaces["infrastructure"].metadata[0].name
-  repository = "https://charts.jetstack.io"
-  chart      = "cert-manager"
+  name            = "cert-manager"
+  namespace       = kubernetes_namespace.namespaces["infrastructure"].metadata[0].name
+  repository      = "https://charts.jetstack.io"
+  chart           = "cert-manager"
+  version         = "1.18.1"
+  cleanup_on_fail = true
 
-  set {
-    name  = "crds.enabled"
-    value = "true"
-  }
+  set = [
+    {
+      name  = "crds.enabled"
+      value = "true"
+    }
+  ]
 }
