@@ -4,7 +4,7 @@ l2announcements:
   enabled: true
 
 ipv6:
-  enabled: false
+  enabled: true
 ipv6NativeRoutingCIDR: ${ipv6_native_routing_cidr}
 
 ipam:
@@ -20,6 +20,9 @@ ipam:
 k8s:
   requireIPv4PodCIDR: false
   requireIPv6PodCIDR: false
+
+k8sServiceHost: ${k8s_service_host}
+k8sServicePort: ${k8s_service_port}
 
 externalIPs:
   enabled: true
