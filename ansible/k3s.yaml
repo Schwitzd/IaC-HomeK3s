@@ -4,11 +4,13 @@
   remote_user: k3s
   become: true
 
+  vars:
+    btrfs_mount: /mnt/k3s_storage
+
   roles:
     - role: schwitzd.collection.btrfs
       vars:
         btrfs_device: /dev/nvme0n1
-        btrfs_mount: /mnt/k3s_storage
         btrfs_opts: defaults,noatime,compress=zstd:3,ssd,discard=async,space_cache=v2,autodefrag,noexec,nodev,nosuid
         btrfs_partition_overwrite: true
       tags: storage
@@ -136,6 +138,42 @@
         - Reload systemd
         - Restart K3s service
       tags: k3s-post
+
+    - name: Ensure ~/.kube directory exists
+      ansible.builtin.file:
+        path: "{{ ansible_env.HOME }}/.kube"
+        state: directory
+        mode: '0700'
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+      tags: k3s-config
+
+    - name: Copy k3s kubeconfig to user home
+      ansible.builtin.copy:
+        src: /etc/rancher/k3s/k3s.yaml
+        dest: "{{ ansible_env.HOME }}/.kube/config"
+        remote_src: true
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+        mode: '0600'
+        force: true
+      tags: k3s-config
+
+    - name: Ensure KUBECONFIG is set in user's shell profile
+      ansible.builtin.lineinfile:
+        path: "{{ ansible_env.HOME }}/.bashrc"
+        line: 'export KUBECONFIG={{ ansible_env.HOME }}/.kube/config'
+        state: present
+        insertafter: EOF
+      tags: k3s-config
+
+    - name: Enable kubectl bash completion in .bashrc
+      ansible.builtin.lineinfile:
+        path: "{{ ansible_env.HOME }}/.bashrc"
+        line: 'source <(kubectl completion bash)'
+        state: present
+        insertafter: EOF
+      tags: k3s-config
 
     # Schedule Raspberry Pi Shutdown at 08:30 AM
     - name: Deploy graceful shutdown script
