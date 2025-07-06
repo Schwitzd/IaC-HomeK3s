@@ -6,7 +6,7 @@ data "vault_generic_secret" "argocd" {
 # ArgoCD Deployment
 resource "helm_release" "argocd" {
   name            = "argocd"
-  namespace       = kubernetes_namespace.namespaces["infrastructure"].metadata[0].name
+  namespace       = kubernetes_namespace.namespaces["argocd"].metadata[0].name
   chart           = "argo-cd"
   repository      = "https://argoproj.github.io/argo-helm"
   version         = "8.1.2"
@@ -17,6 +17,10 @@ resource "helm_release" "argocd" {
       argocd_domain                = "argocd.schwitzd.me"
       argocd_server_admin_password = bcrypt(data.vault_generic_secret.argocd.data["password"])
     })))
+  ]
+
+  depends_on = [
+    kubernetes_namespace.namespaces["argocd"]
   ]
 }
 
@@ -45,7 +49,7 @@ resource "argocd_project" "projects" {
 
   metadata {
     name      = each.key
-    namespace = "infrastructure"
+    namespace = kubernetes_namespace.namespaces["argocd"].metadata[0].name
   }
 
   spec {
