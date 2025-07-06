@@ -68,3 +68,55 @@ resource "helm_release" "cert_manager" {
     }
   ]
 }
+
+# cert-manager deployment
+resource "argocd_application" "cert_manager" {
+  metadata {
+    name      = "cert-manager"
+    namespace = "argocd"
+  }
+
+  spec {
+    project = "infrastructure"
+
+    source {
+      repo_url        = "https://charts.jetstack.io"
+      chart           = "cert-manager"
+      target_revision = "1.18.2"
+    }
+
+    source {
+      repo_url        = argocd_repository.repos["github_gitops"].repo
+      target_revision = "HEAD"
+      ref             = "values"
+    }
+
+    destination {
+      server    = "https://kubernetes.default.svc"
+      namespace = "infrastructure"
+    }
+
+    sync_policy {
+      automated {
+        prune       = false
+        self_heal   = true
+        allow_empty = false
+      }
+
+      retry {
+        limit = 5
+        backoff {
+          duration     = "30s"
+          max_duration = "2m"
+          factor       = 2
+        }
+      }
+
+      sync_options = [
+        "ApplyOutOfSyncOnly=true"
+      ]
+    }
+  }
+
+  depends_on = [argocd_project.projects["infrastructure"]]
+}

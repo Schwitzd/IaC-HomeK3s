@@ -18,3 +18,59 @@ resource "helm_release" "traefik" {
     helm_release.cert_manager
     ]
 }
+
+# Traefik Deployment
+resource "argocd_application" "traefik" {
+  metadata {
+    name      = "traefik"
+    namespace = "argocd"
+  }
+
+  spec {
+    project = "infrastructure"
+
+    source {
+      repo_url        = "https://traefik.github.io/charts"
+      chart           = "traefik"
+      target_revision = "36.3.0"
+
+      helm {
+        value_files = ["$values/traefik/values.yaml"]
+      }
+    }
+
+    source {
+      repo_url        = argocd_repository.repos["github_gitops"].repo
+      target_revision = "HEAD"
+      ref             = "values"
+    }
+
+    destination {
+      server    = "https://kubernetes.default.svc"
+      namespace = "infrastructure"
+    }
+
+    sync_policy {
+      automated {
+        prune       = true
+        self_heal   = true
+        allow_empty = false
+      }
+
+      retry {
+        limit = 5
+        backoff {
+          duration     = "30s"
+          max_duration = "2m"
+          factor       = 2
+        }
+      }
+
+      sync_options = [
+        "ApplyOutOfSyncOnly=true"
+      ]
+    }
+  }
+
+  depends_on = [argocd_project.projects["infrastructure"]]
+}

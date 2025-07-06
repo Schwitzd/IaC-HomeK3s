@@ -14,20 +14,30 @@ resource "helm_release" "coredns" {
   ]
 }
 
-
+# Coredns deployment
 resource "argocd_application" "coredns" {
   metadata {
     name      = "coredns"
-    namespace = "infrastructure"
+    namespace = "argocd"
   }
 
   spec {
     project = "kube-system"
 
     source {
+      repo_url        = "https://coredns.github.io/helm"
+      chart           = "coredns"
+      target_revision = "1.43.0"
+
+      helm {
+        value_files = ["$values/coredns/values.yaml"]
+      }
+    }
+
+    source {
       repo_url        = argocd_repository.repos["github_gitops"].repo
       target_revision = "HEAD"
-      path            = "coredns"
+      ref             = "values"
     }
 
     destination {
