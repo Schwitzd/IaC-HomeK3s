@@ -1,3 +1,4 @@
+# Minimal Cilium deployment
 resource "helm_release" "cilium" {
   name       = "cilium"
   namespace  = "kube-system"
@@ -16,6 +17,7 @@ resource "helm_release" "cilium" {
   ]
 }
 
+# Cilium - IP Pool & L2
 resource "kubernetes_manifest" "cilium_ip" {
   manifest = yamldecode(templatefile("${path.module}/cilium-ip.yaml", {}))
 
@@ -28,11 +30,18 @@ resource "kubernetes_manifest" "cilium_l2" {
   depends_on = [helm_release.cilium]
 }
 
+# Cilium netwokr policies
+resource "kubernetes_manifest" "network_policies" {
+  for_each = fileset("${path.module}/network-policies", "*.yaml")
+
+  manifest = yamldecode(file("${path.module}/network-policies/${each.value}"))
+}
+
 # Cilium deployment
 resource "argocd_application" "cilium" {
   metadata {
     name      = "cilium"
-    namespace = "infrastructure"
+    namespace = "argocd"
   }
 
   spec {
