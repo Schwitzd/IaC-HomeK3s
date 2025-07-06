@@ -1,0 +1,17 @@
+apiVersion: "cilium.io/v2"
+kind: CiliumClusterwideNetworkPolicy
+metadata:
+  name: "coredns-pods-ingress"
+spec:
+  description: "Allow all pods to access CoreDNS UDP/53"
+  endpointSelector:
+    matchLabels:
+      k8s:io.kubernetes.pod.namespace: kube-system
+      app.kubernetes.io/name: coredns
+  ingress:
+    - fromEndpoints:
+        - {}
+      toPorts:
+        - ports:
+            - port: "53"
+              protocol: UDP

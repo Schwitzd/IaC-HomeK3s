@@ -1,0 +1,16 @@
+apiVersion: "cilium.io/v2"
+kind: CiliumNetworkPolicy
+metadata:
+  namespace: infrastructure
+  name: "cert-manager-cainjector"
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: cainjector
+  egress:
+  - toEntities:
+    - kube-apiserver
+    toPorts:
+      - ports:
+        - port: "6443"
+          protocol: TCP

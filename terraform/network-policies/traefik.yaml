@@ -1,0 +1,38 @@
+apiVersion: "cilium.io/v2"
+kind: CiliumClusterwideNetworkPolicy
+metadata:
+  name: "traefik-policy"
+spec:
+  description: "Allow ingress to Traefik from the world and cluster, allow egress to world"
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: traefik
+      k8s:io.kubernetes.pod.namespace: infrastructure
+  ingress:
+    # Allow from any pod in the cluster
+    - fromEndpoints:
+        - {}
+      toPorts:
+        - ports:
+            - port: "443"
+              protocol: TCP
+    # Allow from world (external)
+    - fromEntities:
+        - world
+      toPorts:
+        - ports:
+            - port: "443"
+              protocol: TCP
+  egress:
+    # Allow to all pods in the cluster
+    - toEndpoints:
+        - {}
+    - toEntities:
+        - world
+    # Allow to kube-apiserver
+    - toEntities:
+        - kube-apiserver
+      toPorts:
+        - ports:
+            - port: "6443"
+              protocol: TCP

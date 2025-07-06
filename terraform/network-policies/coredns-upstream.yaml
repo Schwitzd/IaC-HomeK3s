@@ -1,0 +1,26 @@
+apiVersion: "cilium.io/v2"
+kind: CiliumClusterwideNetworkPolicy
+metadata:
+  name: "coredns-upstream"
+spec:
+  description: "Allow CoreDNS to reach upstream DNS and K8s API"
+  endpointSelector:
+    matchLabels:
+      k8s:io.kubernetes.pod.namespace: kube-system
+      app.kubernetes.io/name: coredns
+  egress:
+    # Upstream DNS
+    - toCIDR:
+        - 192.168.14.1/32
+        - fd12:3456:789a:14::1/128
+      toPorts:
+        - ports:
+            - port: "53"
+              protocol: UDP
+    # Allow to kube-apiserver
+    - toEntities:
+        - kube-apiserver
+      toPorts:
+        - ports:
+            - port: "6443"
+              protocol: TCP
