@@ -1,5 +1,5 @@
 locals {
-  namespaces = ["monitoring", "services", "database", "registry", "stocks", "storage", "infrastructure", "ai", "cattle-system", "longhorn-system"]
+  namespaces = ["monitoring", "services", "database", "registry", "stocks", "argocd", "infrastructure", "ai", "cattle-system", "longhorn-system"]
 
   # Argo CD - Projects
   argocd_projects = {
