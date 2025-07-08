@@ -45,7 +45,7 @@ resource "argocd_application" "cilium" {
   }
 
   spec {
-    project = "kube-system"
+    project = "cilium"
 
     source {
       repo_url        = "https://helm.cilium.io"
@@ -89,6 +89,53 @@ resource "argocd_application" "cilium" {
   depends_on = [
     kubernetes_manifest.cilium_ip,
     kubernetes_manifest.cilium_l2,
-    #    argocd_project.projects["kube-system"]
+    argocd_project.projects["cilium"]
+  ]
+}
+
+# Cilium Policies
+resource "argocd_application" "cilium_policies" {
+  metadata {
+    name      = "cilium-policies"
+    namespace = "argocd"
+  }
+
+  spec {
+    project = "cilium"
+
+    source {
+      repo_url        = argocd_repository.repos["github_gitops"].repo
+      target_revision = "main"
+      path            = "network-policies"
+
+      directory {
+        recurse = true
+      }
+    }
+
+    destination {
+      server    = "https://kubernetes.default.svc"
+      namespace = "kube-system"
+    }
+
+    sync_policy {
+      automated {
+        prune       = true
+        self_heal   = true
+        allow_empty = false
+      }
+      retry {
+        limit = "5"
+        backoff {
+          duration     = "30s"
+          max_duration = "2m"
+          factor       = "2"
+        }
+      }
+    }
+  }
+
+  depends_on = [
+    argocd_application.cilium
   ]
 }
