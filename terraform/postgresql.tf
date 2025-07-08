@@ -23,7 +23,7 @@ resource "kubernetes_secret" "postgresql_auth" {
 resource "argocd_application" "postgresql" {
   metadata {
     name      = "postgresql"
-    namespace = "infrastructure"
+    namespace = "argocd"
   }
 
   spec {
@@ -32,7 +32,7 @@ resource "argocd_application" "postgresql" {
     source {
       repo_url        = "registry-1.docker.io/bitnamicharts"
       chart           = "postgresql"
-      target_revision = "16.7.13"
+      target_revision = "16.7.15"
 
       helm {
         value_files = ["$values/postgresql/values.yaml"]

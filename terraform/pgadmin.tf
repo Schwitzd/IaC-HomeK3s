@@ -21,7 +21,7 @@ resource "kubernetes_secret" "pgadmin_secret" {
 resource "argocd_application" "pgadmin" {
   metadata {
     name      = "pgadmin"
-    namespace = "infrastructure"
+    namespace = "argocd"
   }
 
   spec {
