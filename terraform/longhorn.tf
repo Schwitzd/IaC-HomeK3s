@@ -1,7 +1,7 @@
 resource "argocd_application" "longhorn" {
   metadata {
     name      = "longhorn"
-    namespace = "infrastructure"
+    namespace = "argocd"
   }
 
   spec {
