@@ -21,7 +21,7 @@ resource "kubernetes_secret" "redis_auth" {
 resource "argocd_application" "redis" {
   metadata {
     name      = "redis"
-    namespace = "infrastructure"
+    namespace = "argocd"
     annotations = {
       "argocd.argoproj.io/sync-wave" = "1"
     }
@@ -32,7 +32,7 @@ resource "argocd_application" "redis" {
     source {
       repo_url        = "registry-1.docker.io/bitnamicharts"
       chart           = "redis"
-      target_revision = "21.2.0"
+      target_revision = "21.2.7"
 
       helm {
         value_files = ["$values/redis/values.yaml"]
