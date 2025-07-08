@@ -6,6 +6,7 @@
 
   vars:
     btrfs_mount: /mnt/k3s_storage
+    k3s_api_fqdn: k3s.schwitzd.me
 
   roles:
     - role: schwitzd.collection.btrfs
@@ -34,7 +35,6 @@
             filename: "kubernetes-stable-v1.33"
             key_url: "https://pkgs.k8s.io/core:/stable:/v1.33/deb/Release.key"
             key_file: "kubernetes-apt-keyring.gpg"
-      when: role == "control-plane"
       tags: apt
 
     - role: githubixx.cilium_cli
@@ -43,6 +43,15 @@
         cilium_cli_arch: "arm64"
       when: role == "control-plane"
       tags: k3s-cilium
+
+    - role: schwitzd.collection.systemd_timer
+      vars:
+        systemd_timer_name: "k3s-graceful-shutdown"
+        systemd_timer_command: "/usr/local/bin/k3s-graceful-shutdown.sh"
+        systemd_timer_on_calendar: "*-*-* 09:20:00"
+        systemd_timer_user: "root"
+        systemd_timer_group: "root"
+      tags: shutdown-startup
 
   tasks:
     - name: Ensure required packages are installed
@@ -54,6 +63,7 @@
           - helm
           - kubectl
           - dnsutils
+          - cryptsetup
         state: present
         update_cache: true
       tags: apt
@@ -104,14 +114,97 @@
         group: root
       tags: k3s-longhorn
 
-    - name: Set permissions on kubeconfig so root can read it
+    - name: Ensure /etc/modules-load.d/k3s_longhorn.conf exists with proper permissions
       ansible.builtin.file:
-        path: /home/k3s/.kube/config
-        mode: '0640'
-        owner: k3s
+        path: /etc/modules-load.d/k3s_longhorn.conf
+        state: touch
+        owner: root
         group: root
+        mode: '0644'
+      tags: k3s-longhorn
+
+    - name: Ensure /etc/modules-load.d/k3s_longhorn.conf contains iscsi_tcp
+      ansible.builtin.lineinfile:
+        path: /etc/modules-load.d/k3s_longhorn.conf
+        line: "iscsi_tcp"
+        state: present
+        create: false
+      tags: k3s-longhorn
+
+    - name: Ensure /etc/modules-load.d/k3s_longhorn.conf contains dm_crypt
+      ansible.builtin.lineinfile:
+        path: /etc/modules-load.d/k3s_longhorn.conf
+        line: "dm_crypt"
+        state: present
+        create: false
+      tags: k3s-longhorn
+
+    # Kube config
+    - name: Ensure ~/.kube directory exists
+      ansible.builtin.file:
+        path: "/home/{{ ansible_user }}/.kube"
+        state: directory
+        mode: '0700'
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+      tags: k3s-config
+
+    - name: Copy k3s kubeconfig to user home on control-plane
+      ansible.builtin.copy:
+        src: /etc/rancher/k3s/k3s.yaml
+        dest: "/home/{{ ansible_user }}/.kube/config"
+        remote_src: true
+        owner: "{{ ansible_user }}"
+        group: root
+        mode: '0640'
+        force: true
       when: role == "control-plane"
-      tags: k3s-post
+      tags: k3s-config
+
+    - name: Fetch kubeconfig from control-plane
+      ansible.builtin.fetch:
+        src: /etc/rancher/k3s/k3s.yaml
+        dest: /tmp/k3s.yaml
+        flat: true
+      when: role == "control-plane"
+      tags: k3s-config
+
+    - name: Replace server address in kubeconfig (locally)
+      ansible.builtin.replace:
+        path: /tmp/k3s.yaml
+        regexp: 'server: https://127\.0\.0\.1:6443'
+        replace: "server: https://{{ k3s_api_fqdn }}:6443"
+      delegate_to: localhost
+      become: false
+      when: role == "control-plane"
+      tags: k3s-config
+
+    - name: Copy kubeconfig with correct server to workers
+      ansible.builtin.copy:
+        src: /tmp/k3s.yaml
+        dest: "/home/{{ ansible_user }}/.kube/config"
+        owner: "{{ ansible_user }}"
+        group: root
+        mode: '0640'
+        force: true
+      when: role == "worker"
+      tags: k3s-config
+
+    - name: Ensure KUBECONFIG is set in user's shell profile
+      ansible.builtin.lineinfile:
+        path: "/home/{{ ansible_user }}/.bashrc"
+        line: 'export KUBECONFIG="/home/{{ ansible_user }}/.kube/config'
+        state: present
+        insertafter: EOF
+      tags: k3s-config
+
+    - name: Enable kubectl bash completion in .bashrc
+      ansible.builtin.lineinfile:
+        path: "/home/{{ ansible_user }}/.bashrc"
+        line: 'source <(kubectl completion bash)'
+        state: present
+        insertafter: EOF
+      tags: k3s-config
 
     # Configure K3s Garbage Collection Settings
     - name: Ensure K3s environment file exists with strict permissions
@@ -121,7 +214,6 @@
         mode: '0600'
         owner: root
         group: root
-      when: role == "control-plane"
       tags: k3s-post
 
     - name: Set K3s garbage collection environment variables
@@ -139,42 +231,6 @@
         - Restart K3s service
       tags: k3s-post
 
-    - name: Ensure ~/.kube directory exists
-      ansible.builtin.file:
-        path: "{{ ansible_env.HOME }}/.kube"
-        state: directory
-        mode: '0700'
-        owner: "{{ ansible_user }}"
-        group: "{{ ansible_user }}"
-      tags: k3s-config
-
-    - name: Copy k3s kubeconfig to user home
-      ansible.builtin.copy:
-        src: /etc/rancher/k3s/k3s.yaml
-        dest: "{{ ansible_env.HOME }}/.kube/config"
-        remote_src: true
-        owner: "{{ ansible_user }}"
-        group: "{{ ansible_user }}"
-        mode: '0600'
-        force: true
-      tags: k3s-config
-
-    - name: Ensure KUBECONFIG is set in user's shell profile
-      ansible.builtin.lineinfile:
-        path: "{{ ansible_env.HOME }}/.bashrc"
-        line: 'export KUBECONFIG={{ ansible_env.HOME }}/.kube/config'
-        state: present
-        insertafter: EOF
-      tags: k3s-config
-
-    - name: Enable kubectl bash completion in .bashrc
-      ansible.builtin.lineinfile:
-        path: "{{ ansible_env.HOME }}/.bashrc"
-        line: 'source <(kubectl completion bash)'
-        state: present
-        insertafter: EOF
-      tags: k3s-config
-
     # Schedule Raspberry Pi Shutdown at 08:30 AM
     - name: Deploy graceful shutdown script
       ansible.builtin.template:
@@ -188,15 +244,6 @@
     - name: Set K3s service name
       ansible.builtin.set_fact:
         k3s_service_name: "{{ 'k3s' if role == 'control-plane' else 'k3s-agent' }}"
-      tags: shutdown-startup
-
-    - name: Schedule graceful cluster shutdown
-      ansible.builtin.cron:
-        name: "Graceful cluster shutdown"
-        minute: "20"
-        hour: "9"
-        job: "/usr/local/bin/k3s-graceful-shutdown.sh"
-        user: root
       tags: shutdown-startup
 
     - name: Deploy k3s-post-startup script

@@ -13,7 +13,7 @@ export KUBECONFIG=/home/k3s/.kube/config
 NODE_NAME=$(hostname)
 LOCK_NAMESPACE="kube-system"
 LOCK_NAME="shutdown-lock"
-KUBECTL="/usr/local/bin/kubectl"
+KUBECTL="/usr/bin/kubectl"
 
 log "====================[ SHUTDOWN START ]===================="
 log "  Node: $NODE_NAME  |  Role: {{ role }}"

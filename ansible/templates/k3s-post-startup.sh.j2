@@ -3,7 +3,7 @@ set -euo pipefail
 
 export KUBECONFIG=/home/k3s/.kube/config
 NODE_NAME=$(hostname)
-KUBECTL="/usr/local/bin/kubectl"
+KUBECTL="/usr/bin/kubectl"
 COREDNS_IP=$($KUBECTL -n kube-system get svc kube-dns -o jsonpath='{.spec.clusterIP}')
 DNS_DOMAIN="kubernetes.default.svc.cluster.local"
 
@@ -37,8 +37,8 @@ log "[STARTUP] DNS resolution via CoreDNS successful. Removing dns-unready taint
 $KUBECTL taint nodes "$NODE_NAME" dns-unready=true:NoSchedule- || true
 
 {% if role == "control-plane" %}
-# --- CONTROL-PLANE: Scale up ArgoCD ApplicationSet controller ---
-log "[POST-STARTUP] Scaling up ArgoCD ApplicationSet controller..."
+# --- CONTROL-PLANE: Scale up ArgoCD Application controller ---
+log "[POST-STARTUP] Scaling up ArgoCD Application controller..."
 
 ARGOCD_APPSET=$($KUBECTL get statefulsets -A -l app.kubernetes.io/name=argocd-application-controller -o jsonpath='{range .items[*]}{.metadata.namespace}{";"}{.metadata.name}{"\n"}{end}')
 
