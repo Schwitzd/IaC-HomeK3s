@@ -1,11 +1,14 @@
 locals {
-  namespaces = ["monitoring", "services", "database", "registry", "stocks", "argocd", "infrastructure", "ai", "cattle-system", "longhorn-system"]
+  namespaces = [
+    "monitoring", "services", "database", "registry", "stocks",
+    "argocd", "infrastructure", "ai", "cattle-system", "longhorn-system"
+  ]
 
   # Argo CD - Projects
   argocd_projects = {
     cilium = {
       description = "eBPF-based networking policy managed with Cilium "
-      namespaces  = ["kube-system", "cilium-secrets", "infrastructure"]
+      namespaces  = ["kube-system", "cilium-secrets", "infrastructure", "database", "stocks", "cattle-system", "services", "monitoring"]
       source_repos = [
         argocd_repository.repos["github_gitops"].repo,
         argocd_repository.repos["cilium_helm"].repo
@@ -35,6 +38,10 @@ locals {
       source_repos = [
         argocd_repository.repos["github_gitops"].repo,
         argocd_repository.repos["prometheus_helm"].repo
+      ]
+      cluster_resource_whitelist = [
+        { group = "rbac.authorization.k8s.io", kind = "ClusterRole" },
+        { group = "rbac.authorization.k8s.io", kind = "ClusterRoleBinding" }
       ]
     },
     infrastructure = {
