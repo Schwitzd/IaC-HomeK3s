@@ -1,6 +1,6 @@
 # Home K3s Cluster — Infrastructure as Code
 
-This repository defines the **Infrastructure as Code (IaC)** setup for an **home K3s cluster**.
+This repository defines the **Infrastructure as Code (IaC)** setup for my intentionally over-engineered **K3s home cluster**.
 It was built as a learning project to explore Kubernetes operations, but primarily serves to host personal workloads in a modular, automated, and reproducible environment.
 
 The following tools form the foundation of the cluster's provisioning, configuration, and workload management:
@@ -29,7 +29,7 @@ The cluster consists of three physical nodes:
 - 🦆 **duck** – Lenovo ThinkCentre M910q (i7, 32GB RAM)
   Dedicated to AI workloads and compute-heavy tasks. Normally powered off and started on demand.
 
-The cluster runs on my **MikroTik-based home network**. You can find the network configuration and automation [here](https://github.com/Schwitzd/IaC-HomeRouter).
+The cluster runs on my **MikroTik-based home network**. See the [network configuration and automation repository](https://github.com/Schwitzd/IaC-HomeRouter) for details.
 
 ## Networking
 
@@ -150,7 +150,7 @@ The following sections outline how both the **control-plane** and **worker** nod
 ```
 ## Master node
 export K3S_KUBECONFIG_MODE="644"
-export INSTALL_K3S_EXEC=" --disable-cloud-controller --disable=coredns --disable=servicelb --disable=traefik --secrets-encryption --flannel-backend=none --node-ip=<ipv4>,<ipv6> --cluster-cidr=<ipv4-range>,<ipv6-range> --service-cidr=<ipv4-range>,<ipv6-range> --kube-controller-manager-arg=node-cidr-mask-size-ipv6=120 --disable-network-policy --disable-kube-proxy"
+export INSTALL_K3S_EXEC=" --disable-cloud-controller --disable=coredns --disable=servicelb --disable=traefik --secrets-encryption --flannel-backend=none --node-ip=<ipv4>,<ipv6> --cluster-cidr=<ipv4-range>,<ipv6-range> --service-cidr=<ipv4-range>,<ipv6-range> --kube-controller-manager-arg=node-cidr-mask-size-ipv6=120 --disable-network-policy --disable-kube-proxy --tls-san <cluster-fqdn>"
 
 curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION="<desired-version>" sh
 
@@ -232,8 +232,8 @@ tofu apply --var-file=variables.tfvars --target=argocd_application.cilium
 tofu apply --var-file=variables.tfvars --target=argocd_application.cilium_policies
 ```
 
-> ⚠️ **Keep in mind:** At this stage, it is expected that some **Cilium policy violations** will occur, especially if workloads or dependencies are missing.  
-> See the troubleshooting section, specifically [Cilium network policies](#cilium-network-policies), for guidance on identifying and resolving these issues.
+> ⚠️ **Keep in mind:** at this stage, the previous command only allows fundamental policies that enable the core services of the cluster to communicate with each other. However, I expect that some **Cilium policy violations** will occur. Please refer to the troubleshooting section, [Cilium network policies](#cilium-network-policies), for guidance on identifying and resolving these issues.
+In addition, at the time of writing, the Hubble UI primarily focuses on pod-to-pod traffic. Dropped traffic originating from the `host` or `remote-node` may not be visible in the UI. For full visibility, including host-level and remote-node policy drops, use the **Hubble CLI**.
 
 The **Cilium CLI** is installed automatically on the **control-plane** node via a dedicated **Ansible role**, allowing easy access to status and observability features like `cilium status` and `cilium monitor`.
 
@@ -467,13 +467,15 @@ Once **Hubble** is fully deployed in the cluster, troubleshooting becomes much e
 
 Tasks are listed in order of priority:
 
-- [ ] Enable Cilium
-- [ ] Enforce network policies using Cilium
+- [X] Enable Cilium
+- [ ] Enforce network policies using Cilium (in progress)
 - [ ] Migrate all deployments to **Argo CD** (in progress)
+- [ ] Remove all deprecated codes and files
+- [ ] Replace MinIO with something else (Garage?)
 - [ ] Add monitoring to all workloads, included Mikrotik
 - [ ] Vulnerability scan for Harbor images
-- [ ] Investigate whether it makes sense to deploy a **HashiCorp Vault** instance: currently, all secrets are encrypted and stored directly in K3s
 - [ ] Implement Authentik
+- [ ] Investigate whether it makes sense to deploy a **HashiCorp Vault** instance: currently, all secrets are encrypted and stored directly in K3s
 - [X] Move all OpenTofu locals to `locals.tf`
 - [X] Refactor and improve the structure of the **Ansible codebase**
 - [X] Switched from Terraform to OpenTofu
@@ -485,7 +487,7 @@ By open-sourcing my setup, I hope it can help others looking to automate their *
 
 Collaboration and learning from each other is what makes the tech community thrive.
 
-## Final words
+## Closing words
 
 To be honest, I'm convinced that I would not have been able to achieve some of my goals without ChatGPT. At the very least, it would have required much more effort and time than I currently have with a small child.
 
