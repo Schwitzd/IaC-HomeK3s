@@ -32,7 +32,7 @@ resource "argocd_application" "postgresql" {
     source {
       repo_url        = "registry-1.docker.io/bitnamicharts"
       chart           = "postgresql"
-      target_revision = "16.7.15"
+      target_revision = "16.7.16"
 
       helm {
         value_files = ["$values/postgresql/values.yaml"]
