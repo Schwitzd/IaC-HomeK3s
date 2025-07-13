@@ -34,15 +34,16 @@ resource "kubernetes_secret" "harbor_external_redis" {
 resource "argocd_application" "harbor" {
   metadata {
     name      = "harbor"
-    namespace = "infrastructure"
+    namespace = "argocd"
   }
 
   spec {
     project = "registry"
+    
     source {
       repo_url        = "registry-1.docker.io/bitnamicharts"
       chart           = "harbor"
-      target_revision = "26.7.6"
+      target_revision = "26.7.10"
 
       helm {
         value_files = ["$values/harbor/values.yaml"]
