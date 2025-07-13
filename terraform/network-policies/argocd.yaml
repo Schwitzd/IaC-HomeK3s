@@ -1,7 +1,7 @@
 apiVersion: "cilium.io/v2"
 kind: CiliumClusterwideNetworkPolicy
 metadata:
-  name: "argocd-policy"
+  name: "argocd"
 spec:
   description: "Argo CD policy: ingress from Traefik, egress to all K3s API servers/Redis/Internet"
   endpointSelector:
@@ -19,11 +19,10 @@ spec:
             - port: "8080"
               protocol: TCP
     # Allow intercommunication between Argo CD pods
-    - toEndpoints:
+    - fromEndpoints:
         - matchLabels:
           app.kubernetes.io/part-of: argocd
       toPorts:
-        - ports:
         - ports:
             - port: "6379"
               protocol: TCP

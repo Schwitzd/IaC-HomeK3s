@@ -1,7 +1,7 @@
 apiVersion: "cilium.io/v2"
 kind: CiliumClusterwideNetworkPolicy
 metadata:
-  name: "icmp-policy"
+  name: "icmp"
 spec:
   description: "Policy to allow select ICMP traffic globally"
   endpointSelector:

@@ -1,7 +1,7 @@
 apiVersion: "cilium.io/v2"
 kind: CiliumClusterwideNetworkPolicy
 metadata:
-  name: "traefik-policy"
+  name: "traefik"
 spec:
   description: "Allow ingress to Traefik from the world and cluster, allow egress to world"
   endpointSelector:
