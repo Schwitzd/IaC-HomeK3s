@@ -1,8 +1,3 @@
-# ark-analyzer locals
-locals {
-
-}
-
 # ark-analyzer secret
 resource "kubernetes_secret" "ark_analyzer_secret" {
   metadata {
@@ -29,7 +24,7 @@ resource "argocd_application" "ark_analyzer" {
 
   metadata {
     name      = "ark-analyzer-${each.key}"
-    namespace = "infrastructure"
+    namespace = "argocd"
   }
   spec {
     project = "stocks"

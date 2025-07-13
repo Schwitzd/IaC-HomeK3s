@@ -1,0 +1,26 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ark-website-backend-ingress
+  namespace: ${namespace}
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: "websecure"
+    traefik.ingress.kubernetes.io/router.middlewares: "${namespace}-ark-cors@kubernetescrd"
+    cert-manager.io/cluster-issuer: "le-clusterissuer"
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: ${ark_ingress_fqdn}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: ark-website-backend
+                port:
+                  number: 5000
+  tls:
+    - secretName: tls-ark-website-backend
+      hosts:
+        - ${ark_ingress_fqdn}

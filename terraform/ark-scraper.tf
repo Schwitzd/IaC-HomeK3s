@@ -27,7 +27,7 @@ resource "kubernetes_secret" "ark_scraper_secret" {
 resource "argocd_application" "ark_scraper" {
   metadata {
     name      = "ark-scraper"
-    namespace = "infrastructure"
+    namespace = "argocd"
   }
 
   spec {

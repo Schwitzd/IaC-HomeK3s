@@ -1,0 +1,23 @@
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: ark-cors
+  namespace: ${namespace}
+spec:
+  headers:
+    accessControlAllowCredentials: true
+    accessControlAllowHeaders:
+      - Content-Type
+      - Authorization
+      - x-api-key
+    accessControlAllowMethods:
+      - GET
+      - OPTIONS
+      - PUT
+      - PATCH
+      - DELETE
+      - HEAD
+    accessControlAllowOriginList:
+      - https://ark.schwitzd.me
+    accessControlMaxAge: 100
+    addVaryHeader: true
