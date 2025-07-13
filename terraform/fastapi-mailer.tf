@@ -25,7 +25,7 @@ resource "kubernetes_secret" "fastapi_mailer_secret" {
 resource "argocd_application" "fastapi_mailer" {
   metadata {
     name      = "fastapi-mailer"
-    namespace = "infrastructure"
+    namespace = "argocd"
   }
 
   spec {
