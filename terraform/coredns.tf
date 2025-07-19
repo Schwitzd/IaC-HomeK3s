@@ -67,5 +67,8 @@ resource "argocd_application" "coredns" {
     }
   }
 
-  depends_on = [argocd_project.projects["default"]]
+  depends_on = [
+    helm_release.argocd,
+    argocd_project.projects["default"]
+  ]
 }

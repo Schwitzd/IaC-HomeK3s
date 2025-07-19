@@ -32,7 +32,7 @@ resource "argocd_application" "redis" {
     source {
       repo_url        = "registry-1.docker.io/bitnamicharts"
       chart           = "redis"
-      target_revision = "21.2.7"
+      target_revision = "21.2.10"
 
       helm {
         value_files = ["$values/redis/values.yaml"]
@@ -69,8 +69,11 @@ resource "argocd_application" "redis" {
   }
 
   depends_on = [
+    kubernetes_namespace.namespaces["database"],
+    helm_release.argocd,
+    argocd_project.projects["database"],
     kubernetes_secret.redis_auth,
-    argocd_project.projects["database"]
+    argocd_application.longhorn
   ]
 }
 

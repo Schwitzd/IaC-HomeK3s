@@ -13,10 +13,10 @@ resource "helm_release" "traefik" {
     })))
   ]
 
-  depends_on = [ 
+  depends_on = [
     helm_release.cilium,
     helm_release.cert_manager
-    ]
+  ]
 }
 
 # Traefik Deployment
@@ -72,5 +72,8 @@ resource "argocd_application" "traefik" {
     }
   }
 
-  depends_on = [argocd_project.projects["infrastructure"]]
+  depends_on = [
+    helm_release.argocd,
+    argocd_project.projects["infrastructure"]
+  ]
 }

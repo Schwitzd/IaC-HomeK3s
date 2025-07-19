@@ -66,8 +66,9 @@ resource "argocd_application" "fastapi_mailer" {
   }
 
   depends_on = [
-    kubernetes_secret.fastapi_mailer_secret,
-    argocd_project.projects["services"]
+    helm_release.argocd,
+    argocd_project.projects["services"],
+    kubernetes_secret.fastapi_mailer_secret
   ]
 }
 

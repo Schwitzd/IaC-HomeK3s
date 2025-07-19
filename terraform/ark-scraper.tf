@@ -68,8 +68,10 @@ resource "argocd_application" "ark_scraper" {
   }
 
   depends_on = [
-    kubernetes_secret.ark_scraper_secret,
-    argocd_project.projects["stocks"]
+    helm_release.argocd,
+    argocd_project.projects["stocks"],
+    argocd_application.postgresql,
+    kubernetes_secret.ark_scraper_secret
   ]
 }
 

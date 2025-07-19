@@ -52,6 +52,7 @@ resource "argocd_application" "longhorn" {
   }
 
   depends_on = [
+    helm_release.argocd,
     kubernetes_namespace.namespaces["longhorn-system"],
     argocd_project.projects["longhorn"]
   ]
