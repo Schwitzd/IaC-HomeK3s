@@ -1,3 +1,35 @@
+resource "kubernetes_secret" "ark_website_frontend_secret" {
+  metadata {
+    name      = "ark-website-frontend-secret"
+    namespace = kubernetes_namespace.namespaces["stocks"].metadata[0].name
+  }
+
+  data = {
+    NEXT_PUBLIC_ARK_BACKEND_URL = data.vault_generic_secret.ark.data["backend_url"]
+    NEXT_PUBLIC_ARK_BACKEND_API = data.vault_generic_secret.ark.data["backend_api"]
+  }
+
+  type = "Opaque"
+}
+
+resource "kubernetes_secret" "ark_website_backend_secret" {
+  metadata {
+    name      = "ark-website-backend-secret"
+    namespace = kubernetes_namespace.namespaces["stocks"].metadata[0].name
+  }
+
+  data = {
+    POSTGRES_DB       = data.vault_generic_secret.ark.data["postgres_db"]
+    POSTGRES_USER     = data.vault_generic_secret.ark.data["postgres_user"]
+    POSTGRES_PASSWORD = data.vault_generic_secret.ark.data["postgres_password"]
+    POSTGRES_HOST     = data.vault_generic_secret.postgresql.data["hostname"]
+    POSTGRES_PORT     = data.vault_generic_secret.postgresql.data["port"]
+    ARK_BACKEND_API   = data.vault_generic_secret.ark.data["backend_api"]
+  }
+
+  type = "Opaque"
+}
+
 # Ark-website backend deployment
 resource "argocd_application" "ark_website_backend" {
   metadata {
@@ -43,6 +75,7 @@ resource "argocd_application" "ark_website_backend" {
   }
 
   depends_on = [
+    helm_release.argocd,
     kubernetes_secret.ark_website_backend_secret,
     argocd_project.projects["stocks"]
   ]
@@ -93,8 +126,10 @@ resource "argocd_application" "ark_website_frontend" {
   }
 
   depends_on = [
+    helm_release.argocd,
+    argocd_project.projects["stocks"],
     kubernetes_secret.ark_website_frontend_secret,
-    argocd_project.projects["stocks"]
+    argocd_application.ark_website_backend
   ]
 }
 
@@ -158,36 +193,4 @@ resource "argocd_application" "ark_website_frontend" {
 #  }))
 #
 #  depends_on = [kubernetes_manifest.ark_website_frontend_service]
-#}
-#
-#resource "kubernetes_secret" "ark_website_frontend_secret" {
-#  metadata {
-#    name      = "ark-website-frontend-secret"
-#    namespace = kubernetes_namespace.namespaces["stocks"].metadata[0].name
-#  }
-#
-#  data = {
-#    NEXT_PUBLIC_ARK_BACKEND_URL = data.vault_generic_secret.ark.data["backend_url"]
-#    NEXT_PUBLIC_ARK_BACKEND_API = data.vault_generic_secret.ark.data["backend_api"]
-#  }
-#
-#  type = "Opaque"
-#}
-#
-#resource "kubernetes_secret" "ark_website_backend_secret" {
-#  metadata {
-#    name      = "ark-website-backend-secret"
-#    namespace = kubernetes_namespace.namespaces["stocks"].metadata[0].name
-#  }
-#
-#  data = {
-#    POSTGRES_DB       = data.vault_generic_secret.ark.data["postgres_db"]
-#    POSTGRES_USER     = data.vault_generic_secret.ark.data["postgres_user"]
-#    POSTGRES_PASSWORD = data.vault_generic_secret.ark.data["postgres_password"]
-#    POSTGRES_HOST     = data.vault_generic_secret.postgresql.data["hostname"]
-#    POSTGRES_PORT     = data.vault_generic_secret.postgresql.data["port"]
-#    ARK_BACKEND_API   = data.vault_generic_secret.ark.data["backend_api"]
-#  }
-#
-#  type = "Opaque"
 #}
