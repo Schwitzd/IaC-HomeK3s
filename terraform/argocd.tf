@@ -9,7 +9,7 @@ resource "helm_release" "argocd" {
   namespace       = kubernetes_namespace.namespaces["argocd"].metadata[0].name
   chart           = "argo-cd"
   repository      = "https://argoproj.github.io/argo-helm"
-  version         = "8.1.2"
+  version         = "8.1.3"
   cleanup_on_fail = true
 
   values = [
@@ -23,25 +23,6 @@ resource "helm_release" "argocd" {
     kubernetes_namespace.namespaces["argocd"]
   ]
 }
-
-# ArgoCD  Image Deployment
-#resource "helm_release" "argocd_image_updater" {
-#  name            = "argocd-image-updater"
-#  namespace       = kubernetes_namespace.namespaces["infrastructure"].metadata[0].name
-#  chart           = "argocd-image-updater"
-#  repository      = "https://argoproj.github.io/argo-helm"
-#  cleanup_on_fail = true
-#
-#  values = [
-#    yamlencode(yamldecode(templatefile("${path.module}/argocd-image-updater-values.yaml", {
-#      argocd_server_address = data.vault_generic_secret.argocd.data["hostname"]
-#      harbor_api_url        = data.vault_generic_secret.harbor.data["externalURL"]
-#      harbor_credential     = data.vault_generic_secret.argocd.data["harbor_credential"]
-#    })))
-#  ]
-#
-#  depends_on = [helm_release.argocd]
-#}
 
 # ArgoCD projects
 resource "argocd_project" "projects" {

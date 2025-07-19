@@ -8,7 +8,7 @@ locals {
   argocd_projects = {
     cilium = {
       description = "eBPF-based networking policy managed with Cilium "
-      namespaces  = ["kube-system", "cilium-secrets", "infrastructure", "database", "stocks", "cattle-system", "services", "monitoring"]
+      namespaces  = ["kube-system", "cilium-secrets", "infrastructure", "database", "stocks", "cattle-system", "services", "monitoring", "storage"]
       source_repos = [
         argocd_repository.repos["github_gitops"].repo,
         argocd_repository.repos["cilium_helm"].repo
@@ -37,7 +37,8 @@ locals {
       namespaces  = ["monitoring"]
       source_repos = [
         argocd_repository.repos["github_gitops"].repo,
-        argocd_repository.repos["prometheus_helm"].repo
+        argocd_repository.repos["prometheus_helm"].repo,
+        argocd_repository.repos["grafana_helm"].repo
       ]
       cluster_resource_whitelist = [
         { group = "rbac.authorization.k8s.io", kind = "ClusterRole" },
@@ -46,12 +47,13 @@ locals {
     },
     infrastructure = {
       description = "Workloads for all infrastructure services"
-      namespaces  = ["infrastructure", "cattle-system", "kube-system"]
+      namespaces  = ["infrastructure", "cattle-system", "kube-system", "storage"]
       source_repos = [
         argocd_repository.repos["github_gitops"].repo,
         argocd_repository.repos["rancher_helm"].repo,
         argocd_repository.repos["traefik_helm"].repo,
-        argocd_repository.repos["cert-manager_helm"].repo
+        argocd_repository.repos["cert-manager_helm"].repo,
+        argocd_repository.repos["garage_helm"].repo
       ]
       cluster_resource_whitelist = [
         { group = "rbac.authorization.k8s.io", kind = "ClusterRole" },
@@ -74,7 +76,8 @@ locals {
       description = "Reusable helper services and supporting workflows for the cluster"
       namespaces  = ["services"]
       source_repos = [
-        argocd_repository.repos["github_gitops"].repo
+        argocd_repository.repos["github_gitops"].repo,
+        argocd_repository.repos["bitnami_helm"].repo
       ]
     },
     database = {
@@ -164,6 +167,16 @@ locals {
       name = "cert-manager"
       type = "helm"
       url  = "https://charts.jetstack.io"
+    },
+    grafana_helm = {
+      name = "grafana"
+      type = "helm"
+      url  = "https://grafana.github.io/helm-charts"
+    },
+    garage_helm = {
+      name = "garage"
+      type = "git"
+      url  = "https://git.deuxfleurs.fr/Deuxfleurs/garage.git"
     }
   }
 
