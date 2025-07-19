@@ -30,7 +30,7 @@ resource "argocd_application" "pgadmin" {
     source {
       repo_url        = "https://helm.runix.net"
       chart           = "pgadmin4"
-      target_revision = "1.47.0"
+      target_revision = "1.46.0"
 
       helm {
         value_files = ["$values/pgadmin/values.yaml"]
@@ -67,8 +67,11 @@ resource "argocd_application" "pgadmin" {
   }
 
   depends_on = [
+    kubernetes_namespace.namespaces["database"],
+    helm_release.argocd,
+    argocd_project.projects["database"],
     kubernetes_secret.pgadmin_secret,
-    argocd_project.projects["database"]
+    argocd_application.longhorn
   ]
 }
 

@@ -32,7 +32,7 @@ resource "argocd_application" "postgresql" {
     source {
       repo_url        = "registry-1.docker.io/bitnamicharts"
       chart           = "postgresql"
-      target_revision = "16.7.16"
+      target_revision = "16.7.19"
 
       helm {
         value_files = ["$values/postgresql/values.yaml"]
@@ -69,8 +69,11 @@ resource "argocd_application" "postgresql" {
   }
 
   depends_on = [
+    kubernetes_namespace.namespaces["database"],
+    helm_release.argocd,
+    argocd_project.projects["database"],
     kubernetes_secret.postgresql_auth,
-    argocd_project.projects["database"]
+    argocd_application.longhorn
   ]
 }
 
