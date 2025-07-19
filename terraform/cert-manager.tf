@@ -119,5 +119,8 @@ resource "argocd_application" "cert_manager" {
     }
   }
 
-  depends_on = [argocd_project.projects["infrastructure"]]
+  depends_on = [
+    helm_release.argocd,
+    argocd_project.projects["infrastructure"]  
+  ]
 }
