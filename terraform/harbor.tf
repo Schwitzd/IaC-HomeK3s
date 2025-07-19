@@ -43,7 +43,7 @@ resource "argocd_application" "harbor" {
     source {
       repo_url        = "registry-1.docker.io/bitnamicharts"
       chart           = "harbor"
-      target_revision = "26.7.10"
+      target_revision = "26.7.12"
 
       helm {
         value_files = ["$values/harbor/values.yaml"]
@@ -88,9 +88,13 @@ resource "argocd_application" "harbor" {
   }
 
   depends_on = [
+    helm_release.argocd,
     argocd_project.projects["registry"],
     kubernetes_secret.harbor_external_db,
-    kubernetes_secret.harbor_external_redis
+    kubernetes_secret.harbor_external_redis,
+    argocd_application.longhorn,
+    argocd_application.postgresql,
+    argocd_application.redis
   ]
 }
 
