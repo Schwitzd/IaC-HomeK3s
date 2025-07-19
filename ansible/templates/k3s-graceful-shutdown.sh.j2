@@ -65,6 +65,9 @@ sleep 10
 # Scale down Longhorn workloads (Deployments and StatefulSets)
 scale_down_workloads "storage=longhorn" "Longhorn"
 
+# Scale down Garage workloads
+scale_down_workloads "app.kubernetes.io/name=garage" "Garage"
+
 log "[SHUTDOWN] Waiting for all storage=longhorn pods to terminate..."
 while $KUBECTL get pods --all-namespaces -l storage=longhorn 2>/dev/null | grep -qE 'Running|Pending'; do
   log "  ...still waiting for storage=longhorn pods to terminate"
