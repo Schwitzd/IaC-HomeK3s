@@ -343,6 +343,14 @@ To deploy Longhorn:
 tofu apply --var-file=variables.tfvars --target=argocd_application.longhorn
 ```
 
+### Garage
+
+I decided to switch from MinIO to **Garage* after [MinIO's removal of key features from the community edition](https://github.com/minio/object-browser/pull/3509). MinIO is following a "Redis momentum" and almost all functionality are now available only in the enterprise tier. At the time of writing, **Garage** does not offer a web UI and can only be configured from the command line interface (CLI), unlike MinIO, which had a really nice web UI.
+
+The deployment uses the same Argo CD strategy, but Garage requires a cluster layout before storing data. I automated this step using a Kubernetes job that runs upon initial installation, detects the node ID, and applies the layout.
+
+The plan is to automate the process of creating the buckets, which are currently created manually using the CLI inside the container. The goal is to find a Tofu provider to automate this task.
+
 ### Other workflows
 
 All other workloads in the cluster, including databases, monitoring tools, and supporting services follow the same deployment pattern:
@@ -467,15 +475,18 @@ Once **Hubble** is fully deployed in the cluster, troubleshooting becomes much e
 
 Tasks are listed in order of priority:
 
-- [X] Enable Cilium
-- [ ] Enforce network policies using Cilium (in progress)
 - [ ] Migrate all deployments to **Argo CD** (in progress)
+- [ ] Write a desciption on all Ciliun policies and harmonize egress/ingress order and descriptions
+- [ ] Add `revisionHistoryLimit` on my Helm charts
 - [ ] Remove all deprecated codes and files
 - [ ] Replace MinIO with something else (Garage?)
 - [ ] Add monitoring to all workloads, included Mikrotik
-- [ ] Vulnerability scan for Harbor images
+- [ ] Garage Tofu provider for creating buckets
 - [ ] Implement Authentik
 - [ ] Investigate whether it makes sense to deploy a **HashiCorp Vault** instance: currently, all secrets are encrypted and stored directly in K3s
+- [X] Enable Cilium
+- [X] Enforce network policies using Cilium
+- [X] Vulnerability scan for Harbor images
 - [X] Move all OpenTofu locals to `locals.tf`
 - [X] Refactor and improve the structure of the **Ansible codebase**
 - [X] Switched from Terraform to OpenTofu
