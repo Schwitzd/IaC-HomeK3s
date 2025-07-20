@@ -14,7 +14,8 @@ resource "kubernetes_secret" "routeros_backup_secret" {
     SSH_KEY_PATH      = "/secrets/routeros-backup_ed25519"
     BACKUPNAME_PREFIX = "routeros"
     BACKUP_PASSWORD   = data.vault_generic_secret.routeros_backup.data["backup_password"]
-    S3_ENDPOINT       = data.vault_generic_secret.minio.data["s3_endpoint"]
+    S3_ENDPOINT       = data.vault_generic_secret.routeros_backup.data["s3_endpoint"]
+    S3_REGION         = data.vault_generic_secret.routeros_backup.data["s3_region"]
     S3_ACCESS_KEY     = data.vault_generic_secret.routeros_backup.data["s3_access_key"]
     S3_SECRET_KEY     = data.vault_generic_secret.routeros_backup.data["s3_secret_key"]
     S3_BUCKET         = "mikrotik"
@@ -43,7 +44,7 @@ resource "kubernetes_secret" "routeros_backup_ssh_key" {
 resource "argocd_application" "routeros_backup" {
   metadata {
     name      = "routeros-backup"
-    namespace = "infrastructure"
+    namespace = "argocd"
   }
 
   spec {
