@@ -4,6 +4,19 @@ data "vault_generic_secret" "harbor" {
 }
 
 # Harbor secret
+resource "kubernetes_secret" "harbor_admin" {
+  metadata {
+    name      = "harbor-admin-secret"
+    namespace = kubernetes_namespace.namespaces["registry"].metadata[0].name
+  }
+
+  data = {
+    admin-password = data.vault_generic_secret.harbor.data["adminPassword"]
+  }
+
+  type = "Opaque"
+}
+
 resource "kubernetes_secret" "harbor_external_db" {
   metadata {
     name      = "harbor-db-creds"
@@ -90,6 +103,7 @@ resource "argocd_application" "harbor" {
   depends_on = [
     helm_release.argocd,
     argocd_project.projects["registry"],
+    kubernetes_secret.harbor_admin,
     kubernetes_secret.harbor_external_db,
     kubernetes_secret.harbor_external_redis,
     argocd_application.longhorn,
