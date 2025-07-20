@@ -9,6 +9,14 @@ spec:
       app.kubernetes.io/name: traefik
       k8s:io.kubernetes.pod.namespace: infrastructure
   ingress:
+    # Allow from remote-node (used by Kubelet to pulling images)
+    - fromEntities:
+        - remote-node
+      toPorts:
+        - ports:
+            - port: "443"
+              protocol: TCP
+
     # Allow from any pod in the cluster
     - fromEndpoints:
         - {}
@@ -22,6 +30,15 @@ spec:
       toPorts:
         - ports:
             - port: "443"
+              protocol: TCP
+    # Allow Prometheus to scrape metrics
+    - fromEndpoints:
+        - matchLabels:
+            app.kubernetes.io/name: prometheus
+            k8s:io.kubernetes.pod.namespace: monitoring
+      toPorts:
+        - ports:
+            - port: "9100"
               protocol: TCP
   egress:
     # Allow to all pods in the cluster
