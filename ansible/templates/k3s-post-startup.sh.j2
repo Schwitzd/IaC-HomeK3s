@@ -30,7 +30,7 @@ log "[WAIT] Waiting for CoreDNS pod to be ready"
 
 until nslookup "$DNS_DOMAIN" "$COREDNS_IP" > /dev/null 2>&1; do
   log "  ...still waiting for CoreDNS to resolve '${DNS_DOMAIN}' via ${COREDNS_IP}"
-  sleep 10
+  sleep 15
 done
 
 log "[STARTUP] DNS resolution via CoreDNS successful. Removing dns-unready taint from $NODE_NAME."
@@ -39,8 +39,7 @@ $KUBECTL taint nodes "$NODE_NAME" dns-unready=true:NoExecute- || true
 {% if role == "control-plane" %}
 log "[WAIT] for Rook-Ceph to be Ready or Completed..."
 while true; do
-  NOT_READY=$($KUBECTL -n rook-ceph get pods --no-headers | \
-    grep -vE 'Completed|Running' || true | wc -l)
+  NOT_READY=$($KUBECTL -n rook-ceph get pods --no-headers | grep -vE 'Completed|Running' || true | wc -l)
 
   if [ "$NOT_READY" -eq 0 ]; then
     break
@@ -49,7 +48,7 @@ while true; do
   log "  ...still waiting for Rook-Ceph pods to become Ready"
   sleep 20
 done
-log "[POST-STARTUP] All Rook-Ceph pods are Ready
+log "[POST-STARTUP] All Rook-Ceph pods are Ready"
 
 log "[POST-STARTUP] Scaling up ArgoCD Application controller..."
 ARGOCD_APPSET=$($KUBECTL get statefulsets -A -l app.kubernetes.io/name=argocd-application-controller -o jsonpath='{range .items[*]}{.metadata.namespace}{";"}{.metadata.name}{"\n"}{end}')

@@ -178,20 +178,30 @@
       when: role == "worker"
       tags: k3s-config
 
-    - name: Ensure KUBECONFIG is set in user's shell profile
-      ansible.builtin.lineinfile:
+    - name: Add KUBECONFIG export and kubectl completion to .bashrc
+      ansible.builtin.blockinfile:
         path: "/home/{{ ansible_user }}/.bashrc"
-        line: 'export KUBECONFIG="/home/{{ ansible_user }}/.kube/config'
-        state: present
+        marker: "# {mark} ANSIBLE KUBECONFIG AND KUBECTL COMPLETION"
+        block: |
+          export KUBECONFIG="/home/{{ ansible_user }}/.kube/config"
+          source <(kubectl completion bash)
         insertafter: EOF
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+        mode: '0644'
       tags: k3s-config
 
-    - name: Enable kubectl bash completion in .bashrc
-      ansible.builtin.lineinfile:
+    - name: Add K3s aliases to .bashrc
+      ansible.builtin.blockinfile:
         path: "/home/{{ ansible_user }}/.bashrc"
-        line: 'source <(kubectl completion bash)'
-        state: present
+        marker: "# {mark} ANSIBLE K3S ALIASES"
+        block: |
+          alias kwpods='watch kubectl get pods -A -o wide'
+          alias koff='sudo systemctl start k3s-graceful-shutdown.service'
         insertafter: EOF
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+        mode: '0644'
       tags: k3s-config
 
     # Configure K3s Garbage Collection Settings

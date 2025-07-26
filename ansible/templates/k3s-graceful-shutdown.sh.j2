@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # -- Logging function with timestamps, logs to both console and file --
-LOG_FILE="/var/log/k3s-shutdown.log"
+LOG_FILE="/var/log/k3s-graceful-shutdown.log"
 log() {
   local ts
   ts=$(date "+%Y-%m-%d %H:%M:%S")
