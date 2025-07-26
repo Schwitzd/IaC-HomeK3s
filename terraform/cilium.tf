@@ -4,7 +4,7 @@ resource "helm_release" "cilium" {
   namespace  = "kube-system"
   repository = "https://helm.cilium.io/"
   chart      = "cilium"
-  version    = "1.18.0-rc.0"
+  version    = "1.18.0-rc.1"
 
   values = [
     yamlencode(yamldecode(templatefile("${path.module}/cilium-values.yaml", {
@@ -35,6 +35,10 @@ resource "kubernetes_manifest" "network_policies" {
   for_each = fileset("${path.module}/network-policies", "*.yaml")
 
   manifest = yamldecode(file("${path.module}/network-policies/${each.value}"))
+
+  depends_on = [ 
+    kubernetes_namespace.namespaces
+   ]
 }
 
 # Cilium deployment
@@ -50,7 +54,7 @@ resource "argocd_application" "cilium" {
     source {
       repo_url        = "https://helm.cilium.io"
       chart           = "cilium"
-      target_revision = "1.18.0-rc.0"
+      target_revision = "1.18.0-rc.1"
 
       helm {
         value_files = ["$values/cilium/values.yaml"]
