@@ -1,3 +1,9 @@
+# Vault path
+data "vault_generic_secret" "garage" {
+  path = "${var.vault_name}/garage"
+}
+
+# Garage deployment
 resource "argocd_application" "garage" {
   metadata {
     name      = "garage"
