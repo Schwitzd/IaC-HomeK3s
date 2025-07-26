@@ -62,31 +62,35 @@ scale_down_workloads "app.kubernetes.io/name=argocd-application-controller" "Arg
 
 sleep 10
 
-# Scale down Longhorn workloads (Deployments and StatefulSets)
-scale_down_workloads "storage=longhorn" "Longhorn"
+# Scale down storage dependent workloads (Deployments and StatefulSets)
+scale_down_workloads "storage=rook-ceph" "Haystack"
 
 # Scale down Garage workloads
 scale_down_workloads "app.kubernetes.io/name=garage" "Garage"
 
-log "[SHUTDOWN] Waiting for all storage=longhorn pods to terminate..."
-while $KUBECTL get pods --all-namespaces -l storage=longhorn 2>/dev/null | grep -qE 'Running|Pending'; do
-  log "  ...still waiting for storage=longhorn pods to terminate"
+log "[WAIT] for all storage dependent pods to terminate..."
+while $KUBECTL get pods --all-namespaces -l storage=rook-ceph 2>/dev/null | grep -qE 'Running|Pending'; do
+  log "  ...still waiting for storage dependent pods to terminate"
   sleep 5
 done
 
-log "[SHUTDOWN] All storage=longhorn pods terminated."
-log "[SHUTDOWN] Waiting for all Longhorn volumes to be detached from all nodes..."
+log "[SHUTDOWN] All pods dependent on storage have been terminated"
+log "[WAIT] for all Rook-Ceph volumes to be detached from all nodes..."
 
 while true; do
-  ATTACHED=$($KUBECTL -n longhorn-system get volumes -o json | jq -e '.items[] | select(.status.state == "attached")' | wc -l || true)
+  ATTACHED=$($KUBECTL get pods -A -o json | jq -r '
+    [.items[].spec.volumes[]? | select(.persistentVolumeClaim != null) | .persistentVolumeClaim.claimName]
+    | map(select(. != null)) | length' || true)
+
   if [[ "$ATTACHED" -eq 0 ]]; then
     break
   fi
-  log "  ...still waiting for Longhorn volumes to detach from all nodes"
-  sleep 5
+
+  log "  ...still waiting for Rook-Ceph volumes to detach"
+  sleep 8
 done
 
-log "[SHUTDOWN] All Longhorn volumes detached from all nodes."
+log "[SHUTDOWN] All Rook-Ceph volumes detached from all nodes."
 
 log "[SHUTDOWN] Removing shutdown lock ConfigMap $LOCK_NAME in namespace $LOCK_NAMESPACE..."
 $KUBECTL -n "$LOCK_NAMESPACE" delete configmap "$LOCK_NAME" --ignore-not-found
@@ -97,7 +101,7 @@ $KUBECTL -n "$LOCK_NAMESPACE" delete configmap "$LOCK_NAME" --ignore-not-found
 log "[SHUTDOWN] Checking for shutdown lock ConfigMap..."
 
 while $KUBECTL -n "$LOCK_NAMESPACE" get configmap "$LOCK_NAME" >/dev/null 2>&1; do
-  log "[SHUTDOWN] Lock ConfigMap $LOCK_NAME exists, waiting..."
+  log "[WAIT] for lock ConfigMap $LOCK_NAME exists"
   sleep 10
 done
 
@@ -106,23 +110,20 @@ log "[SHUTDOWN] No shutdown lock found, proceeding..."
 
 {% if role == "control-plane" %}
 # --- CONTROL-PLANE NODE: Wait for all others to be gone ---
-log "[SHUTDOWN] Waiting for all workers to shutdown first..."
+log "[WAIT] for all workers to shutdown first..."
 while true; do
   READY_NODES=$($KUBECTL get nodes -o json | jq -r --arg NODE "$NODE_NAME" \
     '.items[] | select(.metadata.name != $NODE) | select((.spec.unschedulable != true) and (.status.conditions[] | select(.type=="Ready" and .status=="True"))) | .metadata.name')
   if [[ -z "$READY_NODES" ]]; then
     log "[SHUTDOWN] All worker nodes are shutdown or NotReady. Proceeding..."
-    sleep 15
     break
   else
-    log "[SHUTDOWN] Waiting for nodes: $READY_NODES"
+    log "[WAIT] for nodes: $READY_NODES"
     sleep 10
   fi
 done
-{% endif %}
-log "[SHUTDOWN] Tainting node to block early workload startup"
-$KUBECTL taint nodes "$NODE_NAME" dns-unready=true:NoSchedule --overwrite || true
 
+{% endif %}
 log "[SHUTDOWN] Cordoning $NODE_NAME"
 $KUBECTL cordon "$NODE_NAME" || true
 
@@ -132,6 +133,12 @@ $KUBECTL drain "$NODE_NAME" \
   --force \
   --delete-emptydir-data \
   --disable-eviction=true || true
+
+log "[SHUTDOWN] Tainting node to block early workload startup"
+$KUBECTL taint nodes "$NODE_NAME" dns-unready=true:NoExecute --overwrite || true
+
+log "[WAIT] for the node to drain before stopping the K3s service"
+sleep 15
 
 {% if role == "control-plane" %}
 log "[SHUTDOWN] Stopping k3s (control-plane)"

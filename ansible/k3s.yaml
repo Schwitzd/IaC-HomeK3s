@@ -1,21 +1,13 @@
----
 - name: Configure Raspberry Pi K3s Cluster
   hosts: all
   remote_user: k3s
   become: true
 
   vars:
-    btrfs_mount: /mnt/k3s_storage
     k3s_api_fqdn: k3s.schwitzd.me
+    ceph_disk: /dev/nvme0n1
 
   roles:
-    - role: schwitzd.collection.btrfs
-      vars:
-        btrfs_device: /dev/nvme0n1
-        btrfs_opts: defaults,noatime,compress=zstd:3,ssd,discard=async,space_cache=v2,autodefrag,noexec,nodev,nosuid
-        btrfs_partition_overwrite: true
-      tags: storage
-
     - role: schwitzd.collection.sshd_hardening
       vars:
         sshd_hardening_allowed_users:
@@ -39,7 +31,7 @@
 
     - role: githubixx.cilium_cli
       vars:
-        cilium_cli_version: "0.18.4"
+        cilium_cli_version: "0.18.5"
         cilium_cli_arch: "arm64"
       when: role == "control-plane"
       tags: k3s-cilium
@@ -57,13 +49,13 @@
     - name: Ensure required packages are installed
       ansible.builtin.apt:
         name:
-          - open-iscsi
           - jq
           - apt-transport-https
           - helm
           - kubectl
           - dnsutils
-          - cryptsetup
+#          - open-iscsi
+#          - cryptsetup
         state: present
         update_cache: true
       tags: apt
@@ -104,40 +96,36 @@
       notify: Reboot system
       tags: k3s-cgroup
 
-    # Longhorn folder
-    - name: Create Longhorn data folder under {{ btrfs_mount }}
-      ansible.builtin.file:
-        path: "{{ btrfs_mount }}/longhorn"
-        state: directory
-        mode: '0755'
-        owner: root
-        group: root
-      tags: k3s-longhorn
+    # Rook ceph
+    - name: Unmount ceph disk
+      ansible.builtin.command: umount {{ ceph_disk }}
+      register: umount_result
+      failed_when: false
+      changed_when: umount_result.rc == 0
+      tags: k3s-rook-ceph
 
-    - name: Ensure /etc/modules-load.d/k3s_longhorn.conf exists with proper permissions
+    - name: Wipe all filesystem signatures from ceph disk
+      ansible.builtin.command: wipefs -a {{ ceph_disk }}
+      register: wipe_result
+      changed_when: wipe_result.rc == 0
+      tags: k3s-rook-ceph
+
+    - name: Ensure /etc/modules-load.d/k3s_rook_ceph.conf exists with proper permissions
       ansible.builtin.file:
-        path: /etc/modules-load.d/k3s_longhorn.conf
+        path: /etc/modules-load.d/k3s_rook_ceph.conf
         state: touch
         owner: root
         group: root
         mode: '0644'
-      tags: k3s-longhorn
+      tags: k3s-rook-ceph
 
-    - name: Ensure /etc/modules-load.d/k3s_longhorn.conf contains iscsi_tcp
+    - name: Ensure /etc/modules-load.d/k3s_rook_ceph.conf contains rbd
       ansible.builtin.lineinfile:
-        path: /etc/modules-load.d/k3s_longhorn.conf
-        line: "iscsi_tcp"
+        path: /etc/modules-load.d/k3s_rook_ceph.conf
+        line: "rbd"
         state: present
         create: false
-      tags: k3s-longhorn
-
-    - name: Ensure /etc/modules-load.d/k3s_longhorn.conf contains dm_crypt
-      ansible.builtin.lineinfile:
-        path: /etc/modules-load.d/k3s_longhorn.conf
-        line: "dm_crypt"
-        state: present
-        create: false
-      tags: k3s-longhorn
+      tags: k3s-rook-ceph
 
     # Kube config
     - name: Ensure ~/.kube directory exists
@@ -214,6 +202,7 @@
         mode: '0600'
         owner: root
         group: root
+      when: role == "control-plane"
       tags: k3s-post
 
     - name: Set K3s garbage collection environment variables

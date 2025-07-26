@@ -8,8 +8,7 @@ The following tools form the foundation of the cluster's provisioning, configura
 ## Core technologies
 
 - **Ansible** – Used to bootstrap nodes, install dependencies, and configure system-level settings before joining the cluster.
-- ~~**Terraform** – Manages all cluster resources declaratively, including Helm releases, namespaces, secrets, and Argo CD applications.~~
-- **OpenTofu** – Manages all cluster resources declaratively, including Helm releases, namespaces, secrets, and Argo CD applications.
+- ~~**Terraform**~~ **OpenTofu** – Manages all cluster resources declaratively, including Helm releases, namespaces, secrets, and Argo CD applications.
 - **K3s** – A lightweight Kubernetes distribution optimized for edge and home lab setups.
 - **Helm** – Handles installation and configuration of complex applications via reusable charts.
 - **Kubernetes Manifests** – Define workloads, services, ingress rules, and other cluster resources in YAML.
@@ -96,7 +95,7 @@ This playbook performs the following:
 - Enables memory cgroups required by K3s
 - Add third-party repositories for Helm and Kubectl, then install the required packages
 - Configures K3s environment variables for image garbage collection
-- Creates folders and permissions needed for Longhorn
+- Prepare disk device and kernel module required by Rook Ceph
 - Sets up static IPv6 networking via NetworkManager
 - Enables IPv6 forwarding for networking compatibility
 - Deploys graceful shutdown and startup scripts + systemd units
@@ -106,10 +105,9 @@ This playbook performs the following:
 ansible-playbook -i inventory.yaml k3s.yaml --tag <tag-name>
 ```
 
-Because the playbook`k3s.yaml` contains tasks that must be run before and after K3s installation, a controlled deployment is strongly suggested. Before installing K3s, run the following tags in order:
+Because the playbook `k3s.yaml` contains tasks that must be run before and after K3s installation, a controlled deployment is strongly suggested. Before installing K3s, run the following tags in order:
 
 - sshd
-- storage
 - apt
 - networking
 - k3s-cgroup
@@ -118,9 +116,12 @@ Follow the [Installation](#installation) section to deploy K3s.
 Once K3s is installed, run the following Ansible tags in order:
 
 - k3s-cilium
-- k3s-longhorn,k3s-post
+- k3s-rook-ceph
+- k3s-post
 - k3s-config
 - shutdown-startup
+
+Once Kubernetes has been installed and all the Ansible tags applied, we can start deploying resources to the cluster.
 
 ### Preparing OpenTofu
 
@@ -333,14 +334,23 @@ Then, create all ArgoCD Projects and assign their associated repositories:
 tofu apply --var-file=variables.tfvars --target=argocd_project.projects
 ```
 
-### Storage
+### Storage with Rook-Ceph
 
-All Longhorn volumes are stored under `/mnt/nvme0/longhorn` on each node.
+After experiencing countless issues with **Longhorn**, primarily due to corrupted PVCs for which I could find no clear explanation, I decided to replace it with **Rook-Ceph**.
+It’s more complex to set up, but so far it has proven to be much more stable and reliable in my environment.
 
-To deploy Longhorn:
+The default storage pool is named `haystack` because, just like a real haystack, it is where all the bulky, stateful data is stored. This is where your Persistent Volume Claims (PVCs) live — the persistent storage used by your workloads that need to remember things after a reboot.
+
+To deploy **Rook-Ceph**:
 
 ```sh
-tofu apply --var-file=variables.tfvars --target=argocd_application.longhorn
+tofu apply --var-file=variables.tfvars --target=argocd_application.rook_ceph
+```
+
+You can access the **Rook-Ceph** dashboard by retrieving the admin password using the following command:
+
+```sh
+kubectl -n rook-ceph get secret rook-ceph-dashboard-password -o jsonpath="{['data']['password']}" | base64 --decode && echo
 ```
 
 ### Garage
