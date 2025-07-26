@@ -14,4 +14,4 @@ tolerations:
   - key: dns-unready
     operator: Equal
     value: "true"
-    effect: NoSchedule
+    effect: NoExecute
