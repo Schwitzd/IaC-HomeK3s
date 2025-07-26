@@ -1,14 +1,14 @@
 locals {
   namespaces = [
     "monitoring", "services", "database", "registry", "stocks",
-    "argocd", "infrastructure", "ai", "cattle-system", "longhorn-system"
+    "argocd", "infrastructure", "ai", "cattle-system", "rook-ceph", "storage"
   ]
 
   # Argo CD - Projects
   argocd_projects = {
     cilium = {
       description = "eBPF-based networking policy managed with Cilium "
-      namespaces  = ["kube-system", "cilium-secrets", "infrastructure", "database", "stocks", "cattle-system", "services", "monitoring", "storage"]
+      namespaces  = ["kube-system", "cilium-secrets", "infrastructure", "database", "stocks", "cattle-system", "services", "monitoring", "storage", "rook-ceph"]
       source_repos = [
         argocd_repository.repos["github_gitops"].repo,
         argocd_repository.repos["cilium_helm"].repo
@@ -97,18 +97,33 @@ locals {
         argocd_repository.repos["bitnami_helm"].repo
       ]
     },
-    longhorn = {
-      description = "Workloads for Longhorn"
-      namespaces  = ["longhorn-system"]
+    #    longhorn = {
+    #      description = "Workloads for Longhorn"
+    #      namespaces  = ["longhorn-system"]
+    #      source_repos = [
+    #        argocd_repository.repos["github_gitops"].repo,
+    #        argocd_repository.repos["longhorn_helm"].repo
+    #      ]
+    #      cluster_resource_whitelist = [
+    #        { group = "apiextensions.k8s.io", kind = "CustomResourceDefinition" },
+    #        { group = "rbac.authorization.k8s.io", kind = "ClusterRole" },
+    #        { group = "rbac.authorization.k8s.io", kind = "ClusterRoleBinding" },
+    #        { group = "scheduling.k8s.io", kind = "PriorityClass" },
+    #        { group = "storage.k8s.io", kind = "StorageClass" }
+    #      ]
+    #    },
+    rook-ceph = {
+      description = "Workloads for Rook Cech"
+      namespaces  = ["rook-ceph"]
       source_repos = [
         argocd_repository.repos["github_gitops"].repo,
-        argocd_repository.repos["longhorn_helm"].repo
+        argocd_repository.repos["rook_helm"].repo
       ]
       cluster_resource_whitelist = [
-        { group = "apiextensions.k8s.io", kind = "CustomResourceDefinition" },
-        { group = "rbac.authorization.k8s.io", kind = "ClusterRole" },
-        { group = "rbac.authorization.k8s.io", kind = "ClusterRoleBinding" },
-        { group = "scheduling.k8s.io", kind = "PriorityClass" }
+        { group = "apiextensions.k8s.io", kind  = "CustomResourceDefinition" },
+        { group = "rbac.authorization.k8s.io", kind  = "ClusterRole" },
+        { group = "rbac.authorization.k8s.io", kind  = "ClusterRoleBinding" },
+        { group = "storage.k8s.io", kind = "StorageClass" }
       ]
     }
   }
@@ -177,6 +192,11 @@ locals {
       name = "garage"
       type = "git"
       url  = "https://git.deuxfleurs.fr/Deuxfleurs/garage.git"
+    },
+    rook_helm = {
+      name = "rook"
+      type = "helm"
+      url  = "https://charts.rook.io/release"
     }
   }
 
