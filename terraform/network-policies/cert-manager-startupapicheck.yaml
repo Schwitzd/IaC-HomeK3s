@@ -1,0 +1,16 @@
+apiVersion: "cilium.io/v2"
+kind: CiliumNetworkPolicy
+metadata:
+  namespace: infrastructure
+  name: "cert-manager-startupapicheck"
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: startupapicheck
+  egress:
+  - toEntities:
+    - kube-apiserver
+    toPorts:
+      - ports:
+        - port: "6443"
+          protocol: TCP
