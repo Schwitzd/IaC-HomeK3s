@@ -197,6 +197,7 @@
         marker: "# {mark} ANSIBLE K3S ALIASES"
         block: |
           alias kwpods='watch kubectl get pods -A -o wide'
+          alias kpods='kubectl get pods -A -o wide'
           alias koff='sudo systemctl start k3s-graceful-shutdown.service'
         insertafter: EOF
         owner: "{{ ansible_user }}"

@@ -452,6 +452,7 @@ flowchart TD
 
   S1 --> S2 --> S3 --> S4 --> S5 --> S6 --> S7 --> S8 --> S9
 ```
+
 > The entire startup process is orchestrated by the script:
 > `/usr/local/bin/k3s-post-startup.sh`
 >
@@ -464,10 +465,11 @@ flowchart TD
 
 To simplify frequent Kubernetes cluster operations, the following shell aliases are included:
 
-| Alias   | Command                                                    | Description                                 |
-|---------|------------------------------------------------------------|---------------------------------------------|
-| `kwpods`| `watch kubectl get pods -A -o wide`                        | Live-updating view of all pods (wide mode)  |
-| `koff`  | `sudo systemctl start k3s-graceful-shutdown.service`       | Trigger a graceful shutdown of the cluster  |
+| Alias   | Command                                              | Description                                 |
+|---------|------------------------------------------------------|---------------------------------------------|
+| `kwpods`| `watch kubectl get pods -A -o wide`                  | Live-updating view of all pods (wide mode)  |
+| `kpods`  | `kubectl get pods -A -o wide`                       | One-time snapshot of all pods (wide mode)   |
+| `koff`  | `sudo systemctl start k3s-graceful-shutdown.service` | Trigger a graceful shutdown of the cluster  |
 
 ## Troubleshooting
 
