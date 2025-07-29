@@ -58,6 +58,13 @@ The Kubernetes **Pod and Service CIDRs** are defined for both address families:
 | Cluster Pods     | `10.42.0.0/16`       | `fd22:2025:6a6a:42::/104`   |
 | Cluster Services | `10.43.0.0/16`       | `fd22:2025:6a6a:43::/112`   |
 
+## Storage
+
+Each Raspberry Pi in the cluster is equipped with a [Geekworm X1001](https://wiki.geekworm.com/X1001) M.2 HAT, providing fast local storage via NVMe SSDs.  
+These disks are pooled together using **Rook-Ceph**, which handles replication, failover, and enables PersistentVolumeClaims (PVCs) to be shared across nodes.
+
+I originally started with **Longhorn**, but after countless headaches with corrupted PVCs and unreliable volume detachment during shutdowns, I decided to switch to **Rook-Ceph**, which has proven far more stable and resilient — even though it requires significantly more resources and can be a bit overwhelming for a Raspberry Pi-based setup.
+
 ## Deployment workflow
 
 ### Preparing the nodes
@@ -336,30 +343,55 @@ tofu apply --var-file=variables.tfvars --target=argocd_project.projects
 
 ### Storage with Rook-Ceph
 
-After experiencing countless issues with **Longhorn**, primarily due to corrupted PVCs for which I could find no clear explanation, I decided to replace it with **Rook-Ceph**.
-It’s more complex to set up, but so far it has proven to be much more stable and reliable in my environment.
+The default storage pool is named `haystack`, inspired by the idea of a place where valuable things are tucked away — in this case, all the cluster's persistent data. This is where Persistent Volume Claims (PVCs) are stored and used by workloads that need to retain data across reboots.
 
-The default storage pool is named `haystack` because, just like a real haystack, it is where all the bulky, stateful data is stored. This is where your Persistent Volume Claims (PVCs) live — the persistent storage used by your workloads that need to remember things after a reboot.
+Rook-Ceph is deployed using **Argo CD** and is composed of two main components:
 
-To deploy **Rook-Ceph**:
-
-```sh
-tofu apply --var-file=variables.tfvars --target=argocd_application.rook_ceph
-```
-
-You can access the **Rook-Ceph** dashboard by retrieving the admin password using the following command:
+- **The Operator**, which acts as a controller that manages the lifecycle of Ceph resources inside the cluster.
+- **The Cluster**, which defines how Ceph itself is configured — including monitors, OSDs, storage pools, and more.
 
 ```sh
-kubectl -n rook-ceph get secret rook-ceph-dashboard-password -o jsonpath="{['data']['password']}" | base64 --decode && echo
+tofu apply --var-file=variables.tfvars --target=argocd_application.rook_ceph_operator
+tofu apply --var-file=variables.tfvars --target=argocd_application.rook_ceph_cluster
 ```
+
 
 ### Garage
 
-I decided to switch from MinIO to **Garage* after [MinIO's removal of key features from the community edition](https://github.com/minio/object-browser/pull/3509). MinIO is following a "Redis momentum" and almost all functionality are now available only in the enterprise tier. At the time of writing, **Garage** does not offer a web UI and can only be configured from the command line interface (CLI), unlike MinIO, which had a really nice web UI.
+I decided to switch from MinIO to **Garage** after [MinIO's removal of key features from the community edition](https://github.com/minio/object-browser/pull/3509). MinIO is following a "Redis momentum" and almost all functionality are now available only in the enterprise tier. At the time of writing, **Garage** does not offer a web UI and can only be configured from the command line interface (CLI), unlike MinIO, which had a really nice web UI.
 
-The deployment uses the same Argo CD strategy, but Garage requires a cluster layout before storing data. I automated this step using a Kubernetes job that runs upon initial installation, detects the node ID, and applies the layout.
+The deployment uses the same Argo CD strategy, but **Garage** requires a cluster layout before storing data. I automated this step using a Kubernetes job that runs upon initial installation, detects the node ID, and applies the layout.
 
 The plan is to automate the process of creating the buckets, which are currently created manually using the CLI inside the container. The goal is to find a Tofu provider to automate this task.
+
+Since switching from Longhorn to **Rook-Ceph**, the other valid alternative is to use the integrated S3-compatible feature in the latter. However, using it requires additional containers with high resource requirements, which are currently overfilling my RPis, so I decided to use Garage instead.
+
+### PostgreSQL with CloudNativePG
+
+After Bitnami announced they would retire their community-maintained Helm charts and shift toward a commercial offering focused on secure, production-ready images — [as detailed in this announcement](https://news.broadcom.com/app-dev/broadcom-introduces-bitnami-secure-images-for-production-ready-containerized-applications), I began searching for a Kubernetes-native alternative to manage my PostgreSQL databases.
+
+That's when I discovered **[CloudNativePG](https://cloudnative-pg.io/)**: an open-source, CNCF-hosted operator built specifically for running PostgreSQL on Kubernetes.
+
+What makes CloudNativePG great:
+
+- **Kubernetes-native lifecycle management**: PostgreSQL clusters, users, databases, backups, failover behavior, and bootstrap scripts are all defined declaratively using Custom Resources (CRs).
+- **Built-in high availability**: Supports multi-instance clusters with synchronous replication and automatic failover.
+- **Self-healing**: Automatically promotes a new primary if the current one goes down.
+
+Just like the rest of my stack, **CloudNativePG** is fully managed via Argo CD. It consists of two key components:
+
+- **The Operator** – Monitors and reconciles `Cluster` resources and automates the full PostgreSQL lifecycle.
+- **The Cluster** – A declarative resource that defines the PostgreSQL setup: replicas, storage, authentication, and init logic.
+
+Deployment follows the usual pattern:
+
+```sh
+# Deploy the operator
+tofu apply --var-file=variables.tfvars --target=argocd_application.cnpg_operator
+
+# Deploy your PostgreSQL cluster
+tofu apply --var-file=variables.tfvars --target=argocd_application.cnpg_cluster
+```
 
 ### Other workflows
 
@@ -471,6 +503,32 @@ To simplify frequent Kubernetes cluster operations, the following shell aliases 
 | `kpods`  | `kubectl get pods -A -o wide`                       | One-time snapshot of all pods (wide mode)   |
 | `koff`  | `sudo systemctl start k3s-graceful-shutdown.service` | Trigger a graceful shutdown of the cluster  |
 
+### Naming convention
+
+To ensure consistency, clarity and maintainability across the cluster, I will follow the naming convention for almost all resources that I create. This approach makes it easier to identify the purpose of each object at a glance.
+
+Below is the naming schema used across the cluster:
+
+| Resource Type         | Format                  | Example                 |
+|-----------------------|-------------------------|-------------------------|
+| Certificate (generic) | `tls-<name>`            | `tls-dashboard`         |
+| Certificate (ingress) | `tls-<name>-ingress`    | `tls-dashboard-ingress` |
+| ClusterRole           | `cr-<name>`             | `cr-read-only`          |
+| ClusterRoleBinding    | `crb-<name>`            | `crb-admin-binding`     |
+| ConfigMap             | `cm-<name>`             | `cm-grafana-dashboards` |
+| CronJob               | `cron-<task>`           | `cron-db-backup`        |
+| Job                   | `job-<task>`            | `job-schema-migration`  |
+| PVC                   | `pvc-<app>-(<purpose>)` | `pvc-postgres-data`     |
+| Role                  | `role-<name>`           | `role-system-metrics`   |
+| RoleBinding           | `rb-<name>`             | `rb-database-access`    |
+| Secret (auth)         | `auth-<name>`           | `auth-admin`            |
+| Secret (db auth)      | `auth-db-<name>`        | `auth-db-postgres`      |
+| Secret (s3 auth)      | `auth-s3-<name>`        | `auth-s3-backup`        |
+| Secret (generic)      | `secret-<purpose>`      | `secret-foo`            |
+| ServiceAccount        | `sa-<name>`             | `sa-monitoring`         |
+
+A lot of resources are created by the corresponding Helm chart, and it is not possible to decide on a name, or it is too overwhelming to change it.
+
 ## Troubleshooting
 
 ### Cilium network policies
@@ -505,10 +563,11 @@ Once **Hubble** is fully deployed in the cluster, troubleshooting becomes much e
 Tasks are listed in order of priority:
 
 - [ ] Migrate all deployments to **Argo CD** (in progress)
+- [ ] Remove all deprecated codes and files (in progress)
+- [ ] All SVC should be in dual-stuck
 - [ ] Write a desciption on all Ciliun policies and harmonize egress/ingress order and descriptions
 - [ ] Add `revisionHistoryLimit` on my Helm charts
-- [ ] Remove all deprecated codes and files
-- [ ] Replace MinIO with something else (Garage?)
+- [ ] Replace MinIO with something else (Garage/Ceph?)
 - [ ] Add monitoring to all workloads, included Mikrotik
 - [ ] Garage Tofu provider for creating buckets
 - [ ] Implement Authentik/MiniAuth/Pocket ID
