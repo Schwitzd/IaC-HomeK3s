@@ -278,12 +278,12 @@ tofu apply --var-file=variables.tfvars --target=kubernetes_manifest.le_clusteris
 
 > **Note**: `depends_on` is not sufficient here because OpenTofu resolves CRDs during the planning phase, not at apply time.
 
-### Traefik ingress
+### Ingress with Traefik
 
 All services in the cluster are exposed externally through **Traefik**, which acts as the **Ingress Controller**.
 **Traefik** is configured to use LoadBalancer IPs provided by **Cilium**, making the setup simpler and more integrated.
 
-To deploy Traefik initially with OpenTofu:
+To deploy **Traefik** initially with OpenTofu:
 
 Deploy **Traefik** with LoadBalancer configuration:
 
@@ -329,7 +329,7 @@ graph LR
 
 - **Automated Sync**: Most system and core workloads are set to sync automatically. ArgoCD will monitor and automatically apply any updates to charts or values files, as well as self-heal if resources drift from the declared state.
 
-To deploy ArgoCD:
+To deploy **Argo CD**:
 
 ```sh
 tofu apply --var-file=variables.tfvars --target=helm_release.argocd
@@ -354,7 +354,6 @@ Rook-Ceph is deployed using **Argo CD** and is composed of two main components:
 tofu apply --var-file=variables.tfvars --target=argocd_application.rook_ceph_operator
 tofu apply --var-file=variables.tfvars --target=argocd_application.rook_ceph_cluster
 ```
-
 
 ### Garage
 
@@ -421,7 +420,7 @@ This project implements a **role-aware, safe power cycle workflow** for the k3s 
 
 - **Node Drain & Poweroff:**
 
-  - A custom taint (`dns-unready=true:NoSchedule`) is applied to each node before shutdown. This prevents DNS-dependent workloads from being scheduled prematurely on the next boot.
+  - A custom taint (`dns-unready=true:NoExecute`) is applied to each node before shutdown. This prevents DNS-dependent workloads from being scheduled prematurely on the next boot.
   - Each node is cordoned and drained using Kubernetes to safely evict pods.
   - The appropriate k3s service (`k3s` for **control-plane**, `k3s-agent` for workers) is stopped.
   - Finally, the node is powered off.
