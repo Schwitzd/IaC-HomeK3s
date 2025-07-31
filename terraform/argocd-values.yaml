@@ -40,7 +40,8 @@ server:
     type: ClusterIP
     servicePortHttp: 80 
     servicePortHttps: 443
-
+  serviceAccount:
+    name: sa-argocd-server
   ingress:
     enabled: true
     ingressClassName: traefik
@@ -51,6 +52,22 @@ server:
     path: /
     pathType: Prefix
     tls: true
+
+controller:
+  serviceAccount:
+    name: sa-argocd-application-controller
+
+repoServer:
+  serviceAccount:
+    name: sa-argocd-repo-server
+
+applicationSet:
+  serviceAccount:
+    name: sa-argocd-applicationset-controller
+
+notifications:
+  serviceAccount:
+    name: sa-argocd-notifications-controller
 
 dex:
   enabled: false
