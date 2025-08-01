@@ -6,8 +6,11 @@ terraform {
     argocd = {
       source = "argoproj-labs/argocd"
     }
+#    garage2 = {
+#      source = "ceski23/garage2"
+#      version = "0.1.1"
+#    }
   }
-  required_version = ">= 0.13"
 }
 
 provider "kubernetes" {
@@ -33,3 +36,9 @@ provider "argocd" {
   username    = data.vault_generic_secret.argocd.data["username"]
   password    = data.vault_generic_secret.argocd.data["password"]
 }
+
+#provider "garage2" {
+#  host   = "${data.vault_generic_secret.redis.data.s3_endpoint}:3903"
+#  scheme = "https"
+#  token  = "bd6751b4108b4538b1f9f06253aae20b53d63657b22f5fd3e3816faa86e76fb6"
+#}
