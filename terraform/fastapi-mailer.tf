@@ -4,9 +4,9 @@ data "vault_generic_secret" "fastapi_mailer" {
 }
 
 # fastapi-mailer secret
-resource "kubernetes_secret" "fastapi_mailer_secret" {
+resource "kubernetes_secret" "fastapi_mailer" {
   metadata {
-    name      = "fastapi-mailer-secret"
+    name      = "secret-fastapi-mailer"
     namespace = kubernetes_namespace.namespaces["services"].metadata[0].name
   }
 
@@ -68,28 +68,6 @@ resource "argocd_application" "fastapi_mailer" {
   depends_on = [
     helm_release.argocd,
     argocd_project.projects["services"],
-    kubernetes_secret.fastapi_mailer_secret
+    kubernetes_secret.fastapi_mailer
   ]
 }
-
-## Deprecated
-#resource "kubernetes_manifest" "fastapi_mailer_deployment" {
-#  manifest = yamldecode(templatefile("${path.module}/fastapi-mailer-deployment.yaml", {
-#    namespace = kubernetes_namespace.namespaces["services"].metadata[0].name
-#    image     = "harbor.schwitzd.me/library/fastapi-mailer:0.2.1"
-#  }))
-#}
-#
-#resource "kubernetes_manifest" "fastapi_mailer_service" {
-#  manifest = yamldecode(templatefile("${path.module}/fastapi-mailer-service.yaml", {
-#    namespace = kubernetes_namespace.namespaces["services"].metadata[0].name
-#  }))
-#}
-#
-#resource "kubernetes_manifest" "fastapi_mailer_ingress" {
-#  manifest = yamldecode(templatefile("${path.module}/fastapi-mailer-ingress.yaml", {
-#    namespace = kubernetes_namespace.namespaces["services"].metadata[0].name
-#  }))
-#}
-
-
