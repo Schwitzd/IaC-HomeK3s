@@ -523,6 +523,7 @@ Below is the naming schema used across the cluster:
 | Secret (auth)         | `auth-<name>`           | `auth-admin`            |
 | Secret (db auth)      | `auth-db-<name>`        | `auth-db-postgres`      |
 | Secret (s3 auth)      | `auth-s3-<name>`        | `auth-s3-backup`        |
+| Secret (ssh auth)     | `auth-ssh-<name>`       | `auth-ssh-router`       |
 | Secret (generic)      | `secret-<purpose>`      | `secret-foo`            |
 | ServiceAccount        | `sa-<name>`             | `sa-monitoring`         |
 
@@ -563,6 +564,7 @@ Tasks are listed in order of priority:
 
 - [ ] Migrate all deployments to **Argo CD** (in progress)
 - [ ] Remove all deprecated codes and files (in progress)
+- [ ] Manager Argo CD with Argo CD & what is DEX?
 - [ ] All SVC should be in dual-stuck
 - [ ] Write a desciption on all Ciliun policies and harmonize egress/ingress order and descriptions
 - [ ] Add `revisionHistoryLimit` on my Helm charts
