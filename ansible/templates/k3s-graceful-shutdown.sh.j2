@@ -69,21 +69,25 @@ scale_down_workloads "app.kubernetes.io/name=garage" "Garage"
 
 # Hibernating the CNPG PostgreSQL cluster
 log "[SHUTDOWN] Locating namespace for CNPG cluster 'cnpg-cluster'..."
-CNPG_NAMESPACE=$($KUBECTL get pods --all-namespaces -l cnpg.io/cluster=cnpg-cluster -o jsonpath='{.items[0].metadata.namespace}')
+CNPG_NAMESPACE=$($KUBECTL get pods --all-namespaces -l cnpg.io/cluster=cnpg-cluster -o jsonpath='{.items[0].metadata.namespace}' 2>/dev/null || true)
 
-log "[SHUTDOWN] Annotating CNPG cluster for hibernation in namespace '$CNPG_NAMESPACE'..."
-$KUBECTL -n "$CNPG_NAMESPACE" annotate cluster cnpg-cluster --overwrite cnpg.io/hibernation=on
+if [[ -z "$CNPG_NAMESPACE" ]]; then
+  log "[WARN] No CNPG pods found for cluster 'cnpg-cluster'. Cluster may be already hibernated or not running. Skipping hibernation step."
+else
+  log "[SHUTDOWN] Annotating CNPG cluster for hibernation in namespace '$CNPG_NAMESPACE'..."
+  $KUBECTL -n "$CNPG_NAMESPACE" annotate cluster cnpg-cluster --overwrite cnpg.io/hibernation=on
 
-log "[WAIT] for CNPG pods to enter and finish Terminating state..."
-while true; do
-  TERMINATING_COUNT=$($KUBECTL -n "$CNPG_NAMESPACE" get pods -l cnpg.io/cluster=cnpg-cluster -o json | jq '[.items[] | select(.metadata.deletionTimestamp != null)] | length')
-  if [[ "$TERMINATING_COUNT" -eq 0 ]]; then
-    log "[SHUTDOWN] CNPG cluster pods have terminated"
-    break
-  fi
-  log "  ...still waiting for CNPG pods to terminate"
-  sleep 15
-done
+  log "[WAIT] for CNPG pods to enter and finish Terminating state..."
+  while true; do
+    TERMINATING_COUNT=$($KUBECTL -n "$CNPG_NAMESPACE" get pods -l cnpg.io/cluster=cnpg-cluster -o json | jq '[.items[] | select(.metadata.deletionTimestamp != null)] | length')
+    if [[ "$TERMINATING_COUNT" -eq 0 ]]; then
+      log "[SHUTDOWN] CNPG cluster pods have terminated"
+      break
+    fi
+    log "  ...still waiting for CNPG pods to terminate"
+    sleep 15
+  done
+fi
 
 log "[WAIT] for all storage dependent pods to terminate..."
 while $KUBECTL get pods --all-namespaces -l storage=rook-ceph 2>/dev/null | grep -qE 'Running|Pending'; do
