@@ -6,7 +6,7 @@ data "vault_generic_secret" "redis" {
 # Redis secret
 resource "kubernetes_secret" "redis" {
   metadata {
-    name      = "redis-secret"
+    name      = "auth-db-redis"
     namespace = kubernetes_namespace.namespaces["database"].metadata[0].name
   }
 
@@ -43,6 +43,11 @@ resource "argocd_application" "redis" {
       repo_url        = argocd_repository.repos["github_gitops"].repo
       target_revision = "HEAD"
       ref             = "values"
+      path            = "redis"
+
+      directory {
+        recurse = true
+      }
     }
 
     destination {
