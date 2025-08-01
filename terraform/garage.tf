@@ -61,6 +61,6 @@ resource "argocd_application" "garage" {
     kubernetes_namespace.namespaces["storage"],
     helm_release.argocd,
     argocd_project.projects["infrastructure"],
-    argocd_application.longhorn
+    argocd_application.rook_ceph_cluster
   ]
 }
