@@ -85,17 +85,3 @@ resource "argocd_application" "routeros_backup" {
     argocd_project.projects["infrastructure"]
   ]
 }
-
-
-## Deprecated
-#resource "kubernetes_manifest" "routeros_backup_cronjob" {
-#  manifest = yamldecode(templatefile("${path.module}/routeros-backup-cronjob.yaml", {
-#    namespace = kubernetes_namespace.namespaces["infrastructure"].metadata[0].name
-#    image     = "harbor.schwitzd.me/library/routeros-backup:1.4.1"
-#  }))
-#
-#  depends_on = [
-#    kubernetes_secret.routeros_backup_secret,
-#    kubernetes_secret.routeros_backup_ssh_key
-#  ]
-#}
