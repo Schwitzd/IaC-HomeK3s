@@ -60,26 +60,6 @@ resource "argocd_application" "ark_analyzer" {
     helm_release.argocd,
     argocd_project.projects["stocks"],
     kubernetes_secret.ark_analyzer_secret,
-    argocd_application.postgresql
+    argocd_application.cnpg_cluster
   ]
 }
-
-## Deprecated
-#resource "kubernetes_manifest" "ark_analyzer_cronjob_first_time_buys" {
-#  manifest = yamldecode(templatefile("${path.module}/ark-analyzer-cronjob-first-time-buys.yaml", {
-#    namespace = kubernetes_namespace.namespaces["stocks"].metadata[0].name
-#    image     = "harbor.schwitzd.me/library/ark-analyzer:0.2.1"
-#  }))
-#
-#  depends_on = [ kubernetes_secret.ark_analyzer_secret ]
-#}
-#
-#resource "kubernetes_manifest" "ark_analyzer_cronjob_top_trades" {
-#  manifest = yamldecode(templatefile("${path.module}/ark-analyzer-cronjob-top-trades.yaml", {
-#    namespace = kubernetes_namespace.namespaces["stocks"].metadata[0].name
-#    image     = "harbor.schwitzd.me/library/ark-analyzer:0.2.1"
-#  }))
-#
-#  depends_on = [ kubernetes_secret.ark_analyzer_secret ]
-#}
-

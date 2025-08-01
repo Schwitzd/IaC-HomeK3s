@@ -4,9 +4,9 @@ data "vault_generic_secret" "ark" {
 }
 
 # ark-scraper secret
-resource "kubernetes_secret" "ark_scraper_secret" {
+resource "kubernetes_secret" "ark_scraper" {
   metadata {
-    name      = "ark-scraper-secret"
+    name      = "secret-ark-scraper"
     namespace = kubernetes_namespace.namespaces["stocks"].metadata[0].name
   }
 
@@ -70,18 +70,7 @@ resource "argocd_application" "ark_scraper" {
   depends_on = [
     helm_release.argocd,
     argocd_project.projects["stocks"],
-    argocd_application.postgresql,
-    kubernetes_secret.ark_scraper_secret
+    argocd_application.cnpg_cluster,
+    kubernetes_secret.ark_scraper
   ]
 }
-
-## Deprecated
-#resource "kubernetes_manifest" "ark_scraper_cronjob" {
-#  manifest = yamldecode(templatefile("${path.module}/ark-scraper-cronjob.yaml", {
-#    namespace          = kubernetes_namespace.namespaces["stocks"].metadata[0].name
-#    image              = "harbor.schwitzd.me/library/ark-scraper:0.5.2"
-#    ARK_TRADE_FILE_URL = "https://etfs.ark-funds.com/hubfs/idt/trades/ARK_Trades.xls"
-#  }))
-#
-#  depends_on = [ kubernetes_secret.ark_scraper_secret ]
-#}
