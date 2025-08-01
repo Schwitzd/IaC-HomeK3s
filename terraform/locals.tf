@@ -76,8 +76,7 @@ locals {
       description = "Reusable helper services and supporting workflows for the cluster"
       namespaces  = ["services"]
       source_repos = [
-        argocd_repository.repos["github_gitops"].repo,
-        argocd_repository.repos["bitnami_helm"].repo
+        argocd_repository.repos["github_gitops"].repo
       ]
     },
     database = {
@@ -85,8 +84,17 @@ locals {
       namespaces  = ["database"]
       source_repos = [
         argocd_repository.repos["github_gitops"].repo,
-        argocd_repository.repos["bitnami_helm"].repo,
+        argocd_repository.repos["groundhog2k_helm"].repo,
+        argocd_repository.repos["cnpg_helm"].repo,
         argocd_repository.repos["runix_helm"].repo
+      ]
+      cluster_resource_whitelist = [
+        { group = "apiextensions.k8s.io", kind = "CustomResourceDefinition" },
+        { group = "rbac.authorization.k8s.io", kind = "ClusterRole" },
+        { group = "rbac.authorization.k8s.io", kind = "ClusterRoleBinding" },
+        { group = "admissionregistration.k8s.io", kind = "MutatingWebhookConfiguration" },
+        { group = "admissionregistration.k8s.io", kind = "ValidatingWebhookConfiguration" },
+        { group = "storage.k8s.io", kind = "StorageClass" }
       ]
     },
     registry = {
@@ -94,24 +102,10 @@ locals {
       namespaces  = ["registry"]
       source_repos = [
         argocd_repository.repos["github_gitops"].repo,
-        argocd_repository.repos["bitnami_helm"].repo
+        argocd_repository.repos["bitnami_helm"].repo,
+        argocd_repository.repos["harbor_helm"].repo
       ]
     },
-    #    longhorn = {
-    #      description = "Workloads for Longhorn"
-    #      namespaces  = ["longhorn-system"]
-    #      source_repos = [
-    #        argocd_repository.repos["github_gitops"].repo,
-    #        argocd_repository.repos["longhorn_helm"].repo
-    #      ]
-    #      cluster_resource_whitelist = [
-    #        { group = "apiextensions.k8s.io", kind = "CustomResourceDefinition" },
-    #        { group = "rbac.authorization.k8s.io", kind = "ClusterRole" },
-    #        { group = "rbac.authorization.k8s.io", kind = "ClusterRoleBinding" },
-    #        { group = "scheduling.k8s.io", kind = "PriorityClass" },
-    #        { group = "storage.k8s.io", kind = "StorageClass" }
-    #      ]
-    #    },
     rook-ceph = {
       description = "Workloads for Rook Cech"
       namespaces  = ["rook-ceph"]
@@ -120,9 +114,9 @@ locals {
         argocd_repository.repos["rook_helm"].repo
       ]
       cluster_resource_whitelist = [
-        { group = "apiextensions.k8s.io", kind  = "CustomResourceDefinition" },
-        { group = "rbac.authorization.k8s.io", kind  = "ClusterRole" },
-        { group = "rbac.authorization.k8s.io", kind  = "ClusterRoleBinding" },
+        { group = "apiextensions.k8s.io", kind = "CustomResourceDefinition" },
+        { group = "rbac.authorization.k8s.io", kind = "ClusterRole" },
+        { group = "rbac.authorization.k8s.io", kind = "ClusterRoleBinding" },
         { group = "storage.k8s.io", kind = "StorageClass" }
       ]
     }
@@ -197,6 +191,21 @@ locals {
       name = "rook"
       type = "helm"
       url  = "https://charts.rook.io/release"
+    },
+    groundhog2k_helm = {
+      name = "groundhog2k"
+      type = "helm"
+      url  = "https://groundhog2k.github.io/helm-charts/"
+    },
+    cnpg_helm = {
+      name = "cloudnative-pg"
+      type = "helm"
+      url  = "https://cloudnative-pg.github.io/charts"
+    },
+    harbor_helm = {
+      name = "harbor"
+      type = "helm"
+      url  = "https://helm.goharbor.io"
     }
   }
 
