@@ -53,20 +53,37 @@ scale_down_workloads() {
   done
 }
 
-# --- CONTROL-PLANE NODE: Create shutdown lock ConfigMap and scale down workloads ---
+# Create shutdown lock ConfigMap and scale down workloads ---
 log "[SHUTDOWN] Creating ConfigMap $LOCK_NAME in namespace $LOCK_NAMESPACE..."
 $KUBECTL -n "$LOCK_NAMESPACE" create configmap "$LOCK_NAME" --from-literal=initiator="$NODE_NAME" --dry-run=client -o yaml | $KUBECTL apply -f -
 
 # Scale down ArgoCD workloads (Deployments and StatefulSets)
 scale_down_workloads "app.kubernetes.io/name=argocd-application-controller" "ArgoCD"
-
 sleep 10
 
 # Scale down storage dependent workloads (Deployments and StatefulSets)
 scale_down_workloads "storage=rook-ceph" "Haystack"
 
-# Scale down Garage workloads
+## Scale down Garage workloads
 scale_down_workloads "app.kubernetes.io/name=garage" "Garage"
+
+# Hibernating the CNPG PostgreSQL cluster
+log "[SHUTDOWN] Locating namespace for CNPG cluster 'cnpg-cluster'..."
+CNPG_NAMESPACE=$($KUBECTL get pods --all-namespaces -l cnpg.io/cluster=cnpg-cluster -o jsonpath='{.items[0].metadata.namespace}')
+
+log "[SHUTDOWN] Annotating CNPG cluster for hibernation in namespace '$CNPG_NAMESPACE'..."
+$KUBECTL -n "$CNPG_NAMESPACE" annotate cluster cnpg-cluster --overwrite cnpg.io/hibernation=on
+
+log "[WAIT] for CNPG pods to enter and finish Terminating state..."
+while true; do
+  TERMINATING_COUNT=$($KUBECTL -n "$CNPG_NAMESPACE" get pods -l cnpg.io/cluster=cnpg-cluster -o json | jq '[.items[] | select(.metadata.deletionTimestamp != null)] | length')
+  if [[ "$TERMINATING_COUNT" -eq 0 ]]; then
+    log "[SHUTDOWN] CNPG cluster pods have terminated"
+    break
+  fi
+  log "  ...still waiting for CNPG pods to terminate"
+  sleep 15
+done
 
 log "[WAIT] for all storage dependent pods to terminate..."
 while $KUBECTL get pods --all-namespaces -l storage=rook-ceph 2>/dev/null | grep -qE 'Running|Pending'; do
@@ -76,21 +93,6 @@ done
 
 log "[SHUTDOWN] All pods dependent on storage have been terminated"
 log "[WAIT] for all Rook-Ceph volumes to be detached from all nodes..."
-
-while true; do
-  ATTACHED=$($KUBECTL get pods -A -o json | jq -r '
-    [.items[].spec.volumes[]? | select(.persistentVolumeClaim != null) | .persistentVolumeClaim.claimName]
-    | map(select(. != null)) | length' || true)
-
-  if [[ "$ATTACHED" -eq 0 ]]; then
-    break
-  fi
-
-  log "  ...still waiting for Rook-Ceph volumes to detach"
-  sleep 8
-done
-
-log "[SHUTDOWN] All Rook-Ceph volumes detached from all nodes."
 
 log "[SHUTDOWN] Removing shutdown lock ConfigMap $LOCK_NAME in namespace $LOCK_NAMESPACE..."
 $KUBECTL -n "$LOCK_NAMESPACE" delete configmap "$LOCK_NAME" --ignore-not-found

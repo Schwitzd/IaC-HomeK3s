@@ -33,7 +33,7 @@ until nslookup "$DNS_DOMAIN" "$COREDNS_IP" > /dev/null 2>&1; do
   sleep 15
 done
 
-log "[STARTUP] DNS resolution via CoreDNS successful. Removing dns-unready taint from $NODE_NAME."
+log "[POST-STARTUP] DNS resolution via CoreDNS successful. Removing dns-unready taint from $NODE_NAME."
 $KUBECTL taint nodes "$NODE_NAME" dns-unready=true:NoExecute- || true
 
 {% if role == "control-plane" %}
@@ -49,6 +49,12 @@ while true; do
   sleep 20
 done
 log "[POST-STARTUP] All Rook-Ceph pods are Ready"
+
+log "[POST-STARTUP] Locating namespace for CNPG cluster..."
+CNPG_NAMESPACE=$($KUBECTL get pods --all-namespaces -l app.kubernetes.io/name=cloudnative-pg -o jsonpath='{.items[0].metadata.namespace}')
+
+log "[POST-STARTUP] Rehydrating CNPG cluster by removing hibernation annotation..."
+$KUBECTL -n "$CNPG_NAMESPACE" annotate cluster cnpg-cluster cnpg.io/hibernation- || true
 
 log "[POST-STARTUP] Scaling up ArgoCD Application controller..."
 ARGOCD_APPSET=$($KUBECTL get statefulsets -A -l app.kubernetes.io/name=argocd-application-controller -o jsonpath='{range .items[*]}{.metadata.namespace}{";"}{.metadata.name}{"\n"}{end}')
