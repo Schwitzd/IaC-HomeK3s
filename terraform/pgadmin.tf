@@ -4,9 +4,9 @@ data "vault_generic_secret" "pgadmin" {
 }
 
 # Pgadmin secret
-resource "kubernetes_secret" "pgadmin_secret" {
+resource "kubernetes_secret" "pgadmin" {
   metadata {
-    name      = "pgadmin-secret"
+    name      = "auth-pgadmin"
     namespace = kubernetes_namespace.namespaces["database"].metadata[0].name
   }
 
@@ -41,6 +41,11 @@ resource "argocd_application" "pgadmin" {
       repo_url        = argocd_repository.repos["github_gitops"].repo
       target_revision = "HEAD"
       ref             = "values"
+      path            = "pgadmin"
+
+      directory {
+        recurse = true
+      }
     }
 
     destination {
@@ -70,26 +75,7 @@ resource "argocd_application" "pgadmin" {
     kubernetes_namespace.namespaces["database"],
     helm_release.argocd,
     argocd_project.projects["database"],
-    kubernetes_secret.pgadmin_secret,
-    argocd_application.longhorn
+    kubernetes_secret.pgadmin,
+    argocd_application.rook_ceph_cluster
   ]
 }
-
-## Deprecated
-#resource "helm_release" "pgadmin" {
-#  name       = "pgadmin"
-#  namespace  = kubernetes_namespace.namespaces["database"].metadata[0].name
-#  chart      = "pgadmin4"
-#  repository = "https://helm.runix.net"
-#  version    = "1.36.0"
-#  cleanup_on_fail = true
-#
-#  values = [
-#    yamlencode(yamldecode(templatefile("${path.module}/pgadmin-values.yaml", {
-#      pgadmin_ingress_fqdn = "pgadmin.schwitzd.me"
-#      pgadmin_email        = data.vault_generic_secret.pgadmin.data["email"]
-#      pgadmin_password     = data.vault_generic_secret.pgadmin.data["password"]
-#    })))
-#  ]
-#
-#}
