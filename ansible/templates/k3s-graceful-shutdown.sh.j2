@@ -68,18 +68,22 @@ scale_down_workloads "storage=rook-ceph" "Haystack"
 scale_down_workloads "app.kubernetes.io/name=garage" "Garage"
 
 # Hibernating the CNPG PostgreSQL cluster
-log "[SHUTDOWN] Locating namespace for CNPG cluster 'cnpg-cluster'..."
-CNPG_NAMESPACE=$($KUBECTL get pods --all-namespaces -l cnpg.io/cluster=cnpg-cluster -o jsonpath='{.items[0].metadata.namespace}' 2>/dev/null || true)
+log "[SHUTDOWN] Locating CNPG cluster (autodetecting namespace and cluster name)..."
 
-if [[ -z "$CNPG_NAMESPACE" ]]; then
-  log "[WARN] No CNPG pods found for cluster 'cnpg-cluster'. Cluster may be already hibernated or not running. Skipping hibernation step."
+# Autodetect CNPG cluster
+CNPG_CLUSTER_INFO="$($KUBECTL get cluster.postgresql.cnpg.io --all-namespaces -o json | jq -r '.items[0] | "\(.metadata.namespace) \(.metadata.name)"')"
+CNPG_NAMESPACE="$(awk '{print $1}' <<< "$CNPG_CLUSTER_INFO")"
+CNPG_CLUSTER_NAME="$(awk '{print $2}' <<< "$CNPG_CLUSTER_INFO")"
+
+if [[ -z "$CNPG_NAMESPACE" ]] || [[ -z "$CNPG_CLUSTER_NAME" ]]; then
+  log "[WARN] No CNPG cluster found. Cluster may already be hibernated or not running. Skipping hibernation step."
 else
-  log "[SHUTDOWN] Annotating CNPG cluster for hibernation in namespace '$CNPG_NAMESPACE'..."
-  $KUBECTL -n "$CNPG_NAMESPACE" annotate cluster cnpg-cluster --overwrite cnpg.io/hibernation=on
+  log "[SHUTDOWN] Annotating CNPG cluster '$CNPG_CLUSTER_NAME' in namespace '$CNPG_NAMESPACE' for hibernation..."
+  $KUBECTL -n "$CNPG_NAMESPACE" annotate cluster.postgresql.cnpg.io "$CNPG_CLUSTER_NAME" --overwrite cnpg.io/hibernation=on
 
   log "[WAIT] for CNPG pods to enter and finish Terminating state..."
   while true; do
-    TERMINATING_COUNT=$($KUBECTL -n "$CNPG_NAMESPACE" get pods -l cnpg.io/cluster=cnpg-cluster -o json | jq '[.items[] | select(.metadata.deletionTimestamp != null)] | length')
+    TERMINATING_COUNT=$($KUBECTL -n "$CNPG_NAMESPACE" get pods -l cnpg.io/cluster="$CNPG_CLUSTER_NAME" -o json | jq '[.items[] | select(.metadata.deletionTimestamp != null)] | length')
     if [[ "$TERMINATING_COUNT" -eq 0 ]]; then
       log "[SHUTDOWN] CNPG cluster pods have terminated"
       break

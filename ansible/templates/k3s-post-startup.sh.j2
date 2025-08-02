@@ -50,11 +50,18 @@ while true; do
 done
 log "[POST-STARTUP] All Rook-Ceph pods are Ready"
 
-log "[POST-STARTUP] Locating namespace for CNPG cluster..."
-CNPG_NAMESPACE=$($KUBECTL get pods --all-namespaces -l app.kubernetes.io/name=cloudnative-pg -o jsonpath='{.items[0].metadata.namespace}')
+log "[STARTUP] Locating CNPG cluster (autodetecting namespace and cluster name)..."
+# Autodetect CNPG cluster
+CNPG_CLUSTER_INFO="$($KUBECTL get cluster.postgresql.cnpg.io --all-namespaces -o json | jq -r '.items[0] | "\(.metadata.namespace) \(.metadata.name)"')"
+CNPG_NAMESPACE="$(awk '{print $1}' <<< "$CNPG_CLUSTER_INFO")"
+CNPG_CLUSTER_NAME="$(awk '{print $2}' <<< "$CNPG_CLUSTER_INFO")"
 
-log "[POST-STARTUP] Rehydrating CNPG cluster by removing hibernation annotation..."
-$KUBECTL -n "$CNPG_NAMESPACE" annotate cluster cnpg-cluster cnpg.io/hibernation- || true
+if [[ -z "$CNPG_NAMESPACE" ]] || [[ -z "$CNPG_CLUSTER_NAME" ]]; then
+  log "[WARN] No CNPG cluster found. Nothing to rehydrate."
+else
+  log "[STARTUP] Rehydrating CNPG cluster '$CNPG_CLUSTER_NAME' in namespace '$CNPG_NAMESPACE' by removing hibernation annotation..."
+  $KUBECTL -n "$CNPG_NAMESPACE" annotate cluster.postgresql.cnpg.io "$CNPG_CLUSTER_NAME" cnpg.io/hibernation- || true
+fi
 
 log "[POST-STARTUP] Scaling up ArgoCD Application controller..."
 ARGOCD_APPSET=$($KUBECTL get statefulsets -A -l app.kubernetes.io/name=argocd-application-controller -o jsonpath='{range .items[*]}{.metadata.namespace}{";"}{.metadata.name}{"\n"}{end}')
