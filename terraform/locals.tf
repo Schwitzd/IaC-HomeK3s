@@ -1,6 +1,6 @@
 locals {
   namespaces = [
-    "monitoring", "services", "database", "registry", "stocks",
+    "observability", "services", "database", "registry", "stocks",
     "argocd", "infrastructure", "ai", "cattle-system", "rook-ceph", "storage"
   ]
 
@@ -8,7 +8,7 @@ locals {
   argocd_projects = {
     cilium = {
       description = "eBPF-based networking policy managed with Cilium "
-      namespaces  = ["kube-system", "cilium-secrets", "infrastructure", "database", "stocks", "cattle-system", "services", "monitoring", "storage", "rook-ceph"]
+      namespaces  = ["kube-system", "cilium-secrets", "infrastructure", "database", "stocks", "cattle-system", "services", "observability", "storage", "rook-ceph"]
       source_repos = [
         argocd_repository.repos["github_gitops"].repo,
         argocd_repository.repos["cilium_helm"].repo
@@ -32,9 +32,9 @@ locals {
         { group = "rbac.authorization.k8s.io", kind = "ClusterRoleBinding" }
       ]
     },
-    monitoring = {
+    observability = {
       description = "Monitoring, alerting, and observability services for the cluster"
-      namespaces  = ["monitoring"]
+      namespaces  = ["observability"]
       source_repos = [
         argocd_repository.repos["github_gitops"].repo,
         argocd_repository.repos["prometheus_helm"].repo,

@@ -7,11 +7,12 @@ resource "argocd_application" "prometheus" {
   }
 
   spec {
-    project = "monitoring"
+    project = "observability"
+
     source {
       repo_url        = "https://prometheus-community.github.io/helm-charts"
       chart           = "prometheus"
-      target_revision = "27.24.0"
+      target_revision = "27.29.0"
       helm {
         value_files = ["$values/prometheus/values.yaml"]
       }
@@ -21,11 +22,16 @@ resource "argocd_application" "prometheus" {
       repo_url        = argocd_repository.repos["github_gitops"].repo
       target_revision = "HEAD"
       ref             = "values"
+      path            = "prometheus"
+
+      directory {
+        recurse = true
+      }
     }
 
     destination {
       server    = "https://kubernetes.default.svc"
-      namespace = "monitoring"
+      namespace = "observability"
     }
 
     sync_policy {
@@ -34,6 +40,7 @@ resource "argocd_application" "prometheus" {
         self_heal   = true
         allow_empty = false
       }
+      
       retry {
         limit = 5
         backoff {
@@ -44,24 +51,10 @@ resource "argocd_application" "prometheus" {
       }
     }
   }
+
   depends_on = [
     helm_release.argocd,
-    argocd_project.projects["monitoring"],
-    argocd_application.longhorn
+    argocd_project.projects["observability"],
+    argocd_application.rook_ceph_cluster
   ]
 }
-
-
-## Deprecated
-#resource "helm_release" "prometheus" {
-#  name            = "prometheus"
-#  namespace       = kubernetes_namespace.namespaces["monitoring"].metadata[0].name
-#  repository      = "https://prometheus-community.github.io/helm-charts"
-#  chart           = "prometheus"
-#  version         = "27.11.0"
-#  cleanup_on_fail = true
-#
-#  values = [
-#    "${file("prometheus-values.yaml")}"
-#  ]
-#}

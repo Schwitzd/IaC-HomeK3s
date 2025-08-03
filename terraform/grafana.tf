@@ -6,8 +6,8 @@ data "vault_generic_secret" "grafana" {
 # Grafana secret
 resource "kubernetes_secret" "grafana_admin" {
   metadata {
-    name      = "grafana-admin-secret"
-    namespace = kubernetes_namespace.namespaces["monitoring"].metadata[0].name
+    name      = "auth-grafana-admin"
+    namespace = kubernetes_namespace.namespaces["observability"].metadata[0].name
   }
 
   data = {
@@ -26,12 +26,12 @@ resource "argocd_application" "grafana" {
   }
 
   spec {
-    project = "monitoring"
+    project = "observability"
 
     source {
       repo_url        = "https://grafana.github.io/helm-charts"
       chart           = "grafana"
-      target_revision = "9.2.10"
+      target_revision = "9.3.0"
 
       helm {
         value_files = ["$values/grafana/values.yaml"]
@@ -51,7 +51,7 @@ resource "argocd_application" "grafana" {
 
     destination {
       server    = "https://kubernetes.default.svc"
-      namespace = "monitoring"
+      namespace = "observability"
     }
 
     sync_policy {
@@ -74,9 +74,9 @@ resource "argocd_application" "grafana" {
 
   depends_on = [
     helm_release.argocd,
-    argocd_project.projects["monitoring"],
+    argocd_project.projects["observability"],
     kubernetes_secret.grafana_admin,
-    argocd_application.longhorn,
+    argocd_application.rook_ceph_cluster,
     argocd_application.prometheus
   ]
 }
