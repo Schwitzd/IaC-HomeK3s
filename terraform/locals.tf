@@ -34,16 +34,19 @@ locals {
     },
     observability = {
       description = "Monitoring, alerting, and observability services for the cluster"
-      namespaces  = ["observability"]
+      namespaces  = ["observability", "kube-system"]
       source_repos = [
         argocd_repository.repos["github_gitops"].repo,
         argocd_repository.repos["prometheus_helm"].repo,
         argocd_repository.repos["grafana_helm"].repo
       ]
-      cluster_resource_whitelist = [
-        { group = "rbac.authorization.k8s.io", kind = "ClusterRole" },
-        { group = "rbac.authorization.k8s.io", kind = "ClusterRoleBinding" }
-      ]
+  cluster_resource_whitelist = [
+    { group = "rbac.authorization.k8s.io", kind = "ClusterRole" },
+    { group = "rbac.authorization.k8s.io", kind = "ClusterRoleBinding" },
+    { group = "apiextensions.k8s.io",       kind = "CustomResourceDefinition" },
+    { group = "admissionregistration.k8s.io", kind = "MutatingWebhookConfiguration" },
+    { group = "admissionregistration.k8s.io", kind = "ValidatingWebhookConfiguration" }
+  ]
     },
     infrastructure = {
       description = "Workloads for all infrastructure services"
