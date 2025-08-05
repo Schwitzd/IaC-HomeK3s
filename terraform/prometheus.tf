@@ -11,8 +11,8 @@ resource "argocd_application" "prometheus" {
 
     source {
       repo_url        = "https://prometheus-community.github.io/helm-charts"
-      chart           = "prometheus"
-      target_revision = "27.29.0"
+      chart           = "kube-prometheus-stack"
+      target_revision = "75.15.1"
       helm {
         value_files = ["$values/prometheus/values.yaml"]
       }
@@ -40,7 +40,11 @@ resource "argocd_application" "prometheus" {
         self_heal   = true
         allow_empty = false
       }
-      
+
+      sync_options = [
+        "ServerSideApply=true"
+      ]
+
       retry {
         limit = 5
         backoff {
