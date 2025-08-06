@@ -1,6 +1,6 @@
 locals {
   namespaces = [
-    "observability", "services", "database", "registry", "stocks",
+    "observability", "services", "database", "registry", "stocks", "productivity",
     "argocd", "infrastructure", "ai", "cattle-system", "rook-ceph", "storage"
   ]
 
@@ -8,7 +8,7 @@ locals {
   argocd_projects = {
     cilium = {
       description = "eBPF-based networking policy managed with Cilium "
-      namespaces  = ["kube-system", "cilium-secrets", "infrastructure", "database", "stocks", "cattle-system", "services", "observability", "storage", "rook-ceph"]
+      namespaces  = ["kube-system", "cilium-secrets", "infrastructure", "database", "stocks", "cattle-system", "services", "observability", "storage", "rook-ceph", "productivity"]
       source_repos = [
         argocd_repository.repos["github_gitops"].repo,
         argocd_repository.repos["cilium_helm"].repo
@@ -40,13 +40,13 @@ locals {
         argocd_repository.repos["prometheus_helm"].repo,
         argocd_repository.repos["grafana_helm"].repo
       ]
-  cluster_resource_whitelist = [
-    { group = "rbac.authorization.k8s.io", kind = "ClusterRole" },
-    { group = "rbac.authorization.k8s.io", kind = "ClusterRoleBinding" },
-    { group = "apiextensions.k8s.io",       kind = "CustomResourceDefinition" },
-    { group = "admissionregistration.k8s.io", kind = "MutatingWebhookConfiguration" },
-    { group = "admissionregistration.k8s.io", kind = "ValidatingWebhookConfiguration" }
-  ]
+      cluster_resource_whitelist = [
+        { group = "rbac.authorization.k8s.io", kind = "ClusterRole" },
+        { group = "rbac.authorization.k8s.io", kind = "ClusterRoleBinding" },
+        { group = "apiextensions.k8s.io", kind = "CustomResourceDefinition" },
+        { group = "admissionregistration.k8s.io", kind = "MutatingWebhookConfiguration" },
+        { group = "admissionregistration.k8s.io", kind = "ValidatingWebhookConfiguration" }
+      ]
     },
     infrastructure = {
       description = "Workloads for all infrastructure services"
@@ -121,6 +121,14 @@ locals {
         { group = "rbac.authorization.k8s.io", kind = "ClusterRole" },
         { group = "rbac.authorization.k8s.io", kind = "ClusterRoleBinding" },
         { group = "storage.k8s.io", kind = "StorageClass" }
+      ]
+    },
+    productivity = {
+      description = "Document management and productivity tools"
+      namespaces  = ["productivity"]
+      source_repos = [
+        argocd_repository.repos["github_gitops"].repo,
+        argocd_repository.repos["paperless_helm"].repo
       ]
     }
   }
@@ -209,7 +217,13 @@ locals {
       name = "harbor"
       type = "helm"
       url  = "https://helm.goharbor.io"
-    }
+    },
+    paperless_helm = {
+      name       = "Paperless"
+      type       = "helm"
+      url        = "codeberg.org/wrenix/helm-charts"
+      enable_oci = true
+    },
   }
 
   # Ark Analyzer
