@@ -46,26 +46,6 @@ resource "kubernetes_secret" "postgresql_roles" {
   type = "kubernetes.io/basic-auth"
 }
 
-resource "kubernetes_secret" "postgresql_backup" {
-  metadata {
-    name      = "postgresql-backup"
-    namespace = kubernetes_namespace.namespaces["database"].metadata[0].name
-  }
-
-  data = {
-    POSTGRES_HOST        = data.vault_generic_secret.postgresql.data["hostname"]
-    POSTGRES_USER        = data.vault_generic_secret.postgresql_backup.data["backup_user"]
-    POSTGRES_PASSWORD    = data.vault_generic_secret.postgresql_backup.data["backup_password"]
-    S3_ENDPOINT          = data.vault_generic_secret.garage.data["s3_endpoint"]
-    S3_REGION            = data.vault_generic_secret.garage.data["s3_region"]
-    S3_ACCESS_KEY_ID     = data.vault_generic_secret.postgresql_backup.data["s3_access_key"]
-    S3_SECRET_ACCESS_KEY = data.vault_generic_secret.postgresql_backup.data["s3_access_key"]
-    S3_BUCKET            = data.vault_generic_secret.postgresql_backup.data["s3_bucket"]
-  }
-
-  type = "Opaque"
-}
-
 # CloudNativePG pperator deployment
 resource "argocd_application" "cnpg_operator" {
   metadata {
@@ -194,24 +174,21 @@ resource "argocd_application" "cnpg_cluster" {
   ]
 }
 
-
-# PostgreSQL Backup job
-resource "argocd_application" "postgresql_backup" {
+resource "argocd_application" "cnpg_barman_cloud" {
   metadata {
-    name      = "postgresql-backup"
+    name      = "cnpg-barman-cloud"
     namespace = "argocd"
   }
-
   spec {
     project = "database"
 
     source {
       repo_url        = argocd_repository.repos["github_gitops"].repo
       target_revision = "HEAD"
-      path            = "postgresql-backup"
+      path            = "cnpg-barman-cloud"
 
-      helm {
-        value_files = ["values.yaml"]
+      directory {
+        recurse = true
       }
     }
 
@@ -227,8 +204,12 @@ resource "argocd_application" "postgresql_backup" {
         allow_empty = false
       }
 
+      sync_options = [
+        "ServerSideApply=true"
+      ]
+
       retry {
-        limit = 3
+        limit = 5
         backoff {
           duration     = "30s"
           max_duration = "2m"
@@ -237,11 +218,4 @@ resource "argocd_application" "postgresql_backup" {
       }
     }
   }
-
-  depends_on = [
-    helm_release.argocd,
-    argocd_project.projects["database"],
-    kubernetes_secret.postgresql_backup,
-    argocd_application.cnpg_cluster
-  ]
 }
