@@ -32,7 +32,7 @@ resource "argocd_application" "redis" {
     source {
       repo_url        = "https://groundhog2k.github.io/helm-charts/"
       chart           = "redis"
-      target_revision = "2.0.3"
+      target_revision = "2.1.0"
 
       helm {
         value_files = ["$values/redis/values.yaml"]
