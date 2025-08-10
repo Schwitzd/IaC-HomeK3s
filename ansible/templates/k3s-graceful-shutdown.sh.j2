@@ -44,15 +44,14 @@ scale_down_workloads() {
 log "[SHUTDOWN] Creating ConfigMap $LOCK_NAME in namespace $LOCK_NAMESPACE..."
 $KUBECTL -n "$LOCK_NAMESPACE" create configmap "$LOCK_NAME" --from-literal=initiator="$NODE_NAME" --dry-run=client -o yaml | $KUBECTL apply -f -
 
-# Scale down ArgoCD workloads
+# Scale down ArgoCD & Prometheus operator
 scale_down_workloads "app.kubernetes.io/name=argocd-application-controller" "ArgoCD"
-sleep 10
-
-## Scale down Prometheus operator
 scale_down_workloads "app.kubernetes.io/name=kube-prometheus-stack-prometheus-operator" "Prometheus"
+sleep 10
 
 # Scale down storage dependent workloads
 scale_down_workloads "storage=rook-ceph,shutdown=app" "Haystack apps"
+scale_down_workloads "app.kubernetes.io/name=paperless-ngx" "Paperless"
 sleep 10
 scale_down_workloads "storage=rook-ceph,shutdown=db" "Haystack databases"
 
