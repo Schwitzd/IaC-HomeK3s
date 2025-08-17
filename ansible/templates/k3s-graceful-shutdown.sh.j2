@@ -83,12 +83,6 @@ else
   done
 fi
 
-log "[WAIT] for all storage dependent pods to terminate..."
-while $KUBECTL get pods --all-namespaces -l storage=rook-ceph 2>/dev/null | grep -qE 'Running|Pending'; do
-  log "  ...still waiting for storage dependent pods to terminate"
-  sleep 5
-done
-
 log "[SHUTDOWN] All pods dependent on storage have been terminated"
 log "[WAIT] for all Rook-Ceph volumes to be detached from all nodes..."
 
