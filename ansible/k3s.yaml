@@ -39,11 +39,18 @@
     - role: schwitzd.collection.systemd_timer
       vars:
         systemd_timer_name: "k3s-graceful-shutdown"
-        systemd_timer_command: "/usr/local/bin/k3s-graceful-shutdown.sh"
+        systemd_timer_instance: "default"
+        systemd_timer_command: "/usr/local/bin/k3s-graceful-shutdown.sh %i"
         systemd_timer_on_calendar: "*-*-* 09:20:00"
         systemd_timer_user: "root"
         systemd_timer_group: "root"
       tags: shutdown-startup
+
+    - role: schwitzd.collection.debian_upgrade
+      vars:
+        debian_upgrade_target_release: trixie
+        debian_upgrade_allow_reboot: false
+      tags: os-upgrade
 
   tasks:
     - name: Ensure required packages are installed
@@ -198,12 +205,12 @@
         block: |
           alias kwpods='watch kubectl get pods -A -o wide'
           alias kpods='kubectl get pods -A -o wide'
-          alias koff='sudo systemctl start k3s-graceful-shutdown.service'
+          alias koff='sudo systemctl start k3s-graceful-shutdown@remove-ssh-lock.service'
         insertafter: EOF
         owner: "{{ ansible_user }}"
         group: "{{ ansible_user }}"
         mode: '0644'
-      tags: k3s-config
+      tags: k3s-aliases
 
     # Configure K3s Garbage Collection Settings
     - name: Ensure K3s environment file exists with strict permissions
