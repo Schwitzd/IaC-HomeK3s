@@ -10,19 +10,78 @@ log() {
 }
 
 export KUBECONFIG=/home/k3s/.kube/config
+ACTION="${1:-}"
 NODE_NAME=$(hostname)
 LOCK_NAMESPACE="kube-system"
 LOCK_NAME="shutdown-lock"
+LOCK_SSH_PREFIX="ssh-lock-"
+TODAY_UTC="$(date -u +%F)"
 KUBECTL="/usr/bin/kubectl"
 
 log "====================[ SHUTDOWN START ]===================="
 log "  Node: $NODE_NAME  |  Role: {{ role }}"
 
-{% if role == "worker" %}
-# Wait 5 seconds for worker nodes
-log "[INFO] Worker node detected, waiting 10 seconds before proceeding..."
-sleep 10
+# Argument actions received by systemd argument
+# Action: remove-ssh-lock
+if [[ "$ACTION" == "remove-ssh-lock" ]]; then
+  CM_NAME="${LOCK_SSH_PREFIX}${NODE_NAME}"
+  log "[ACTION] remove-ssh-lock requested for $NODE_NAME -> $CM_NAME"
+  if $KUBECTL -n "$LOCK_NAMESPACE" get configmap "$CM_NAME" >/dev/null 2>&1; then
+    $KUBECTL -n "$LOCK_NAMESPACE" delete configmap "$CM_NAME" --ignore-not-found >/dev/null 2>&1 || true
+    log "[ACTION] Deleted SSH lock ConfigMap $CM_NAME"
+  else
+    log "[ACTION] No SSH lock ConfigMap $CM_NAME present; proceeding"
+  fi
+fi
+
+{% if role == "control-plane" %}
+log "[WAIT] for workers actions..."
+sleep 15
 {% endif %}
+
+{% if role == "worker" %}
+# Wait 15 seconds for worker nodes
+log "[INFO] Worker node detected, waiting 15 seconds before proceeding..."
+sleep 15
+{% endif %}
+
+# SSH lock precheck
+log "[PRECHECK] Checking for active SSH locks..."
+
+# Fetch all CMs once
+LOCKS_JSON="$($KUBECTL -n "$LOCK_NAMESPACE" get configmap -o json 2>/dev/null || echo '{"items": []}')"
+
+# Delete stale locks
+echo "$LOCKS_JSON" \
+  | jq -r --arg p "$LOCK_SSH_PREFIX" --arg today "$TODAY_UTC" '
+      .items[]
+      | select(.metadata.name | startswith($p))
+      | {name: .metadata.name, created: (.metadata.creationTimestamp // "" | split("T")[0])}
+      | select(.created != "" and .created != $today)
+      | .name' \
+  | while read -r cm; do
+      [[ -z "$cm" ]] && continue
+      log "[PRECHECK] Removing stale SSH lock ConfigMap $cm"
+      $KUBECTL -n "$LOCK_NAMESPACE" delete configmap "$cm" --ignore-not-found || true
+    done
+
+# Recompute after potential deletions
+LOCKS_JSON="$($KUBECTL -n "$LOCK_NAMESPACE" get configmap -o json 2>/dev/null || echo '{"items": []}')"
+
+# Any valid locks?
+VALID_LOCKS="$(echo "$LOCKS_JSON" \
+  | jq -r --arg p "$LOCK_SSH_PREFIX" --arg today "$TODAY_UTC" '
+      .items[]
+      | select(.metadata.name | startswith($p))
+      | select((.metadata.creationTimestamp // "" | split("T")[0]) == $today)
+      | .metadata.name')"
+
+if [[ -n "$VALID_LOCKS" ]]; then
+  log "[ABORT] Active SSH lock(s) detected for today (UTC): $(echo "$VALID_LOCKS" | tr '\n' ' ')"
+  log "[ABORT] Skipping shutdown to avoid spooking the animals"
+  exit 0
+fi
+log "[PRECHECK] No active SSH locks, proceeding with shutdown"
 
 {% if role == "control-plane" %}
 # Function: Scale down all Deployments and StatefulSets for a given label selector
@@ -51,7 +110,6 @@ sleep 10
 
 # Scale down storage dependent workloads
 scale_down_workloads "storage=rook-ceph,shutdown=app" "Haystack apps"
-scale_down_workloads "app.kubernetes.io/name=paperless-ngx" "Paperless"
 sleep 10
 scale_down_workloads "storage=rook-ceph,shutdown=db" "Haystack databases"
 
