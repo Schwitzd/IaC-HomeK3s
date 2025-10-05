@@ -206,10 +206,30 @@
           alias kwpods='watch kubectl get pods -A -o wide'
           alias kpods='kubectl get pods -A -o wide'
           alias koff='sudo systemctl start k3s-graceful-shutdown@remove-ssh-lock.service'
+          alias klogout='kubectl -n kube-system delete cm ssh-lock-$(hostname) --ignore-not-found; logout'
         insertafter: EOF
         owner: "{{ ansible_user }}"
         group: "{{ ansible_user }}"
         mode: '0644'
+      tags: k3s-aliases
+
+    # Fish shell Aliases
+    - name: Ensure fish functions directory exists
+      ansible.builtin.file:
+        path: "{{ lookup('env', 'HOME') }}/.config/fish/functions"
+        state: directory
+        mode: "0755"
+      delegate_to: localhost
+      become: false
+      tags: k3s-aliases
+
+    - name: Install klogin fish function
+      ansible.builtin.template:
+        src: klogin.fish.j2
+        dest: "{{ lookup('env', 'HOME') }}/.config/fish/functions/klogin.fish"
+        mode: "0644"
+      delegate_to: localhost
+      become: false
       tags: k3s-aliases
 
     # Configure K3s Garbage Collection Settings
