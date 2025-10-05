@@ -1,0 +1,15 @@
+function klogin
+    if test (count $argv) -lt 1
+        echo "Usage: klogin <host>"
+        return 1
+    end
+
+    set -l host $argv[1]
+    set -l fqdn "$host.schwitzd.me"
+    set -l key  "$HOME/.ssh/$host.schwitzd.me_ed25519"
+
+    # Run kubectl, then keep the session open with a login shell
+    set -l remote_cmd "kubectl -n kube-system create configmap ssh-lock-$host --dry-run=client -o yaml | kubectl apply -f - >/dev/null 2>&1; exec bash -l"
+
+    ssh -tt -i "$key" "k3s@$fqdn" -- "$remote_cmd"
+end
