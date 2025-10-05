@@ -113,9 +113,6 @@ scale_down_workloads "storage=rook-ceph,shutdown=app" "Haystack apps"
 sleep 10
 scale_down_workloads "storage=rook-ceph,shutdown=db" "Haystack databases"
 
-## Scale down Garage workloads
-scale_down_workloads "app.kubernetes.io/name=garage" "Garage"
-
 # Hibernating the CNPG PostgreSQL cluster
 log "[SHUTDOWN] Locating CNPG cluster (autodetecting namespace and cluster name)..."
 
