@@ -54,7 +54,7 @@ resource "argocd_application" "cilium" {
     source {
       repo_url        = "https://helm.cilium.io"
       chart           = "cilium"
-      target_revision = "1.18.0-rc.1"
+      target_revision = "1.18.1"
 
       helm {
         value_files = ["$values/cilium/values.yaml"]

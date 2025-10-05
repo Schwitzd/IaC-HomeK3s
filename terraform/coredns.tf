@@ -27,7 +27,7 @@ resource "argocd_application" "coredns" {
     source {
       repo_url        = "https://coredns.github.io/helm"
       chart           = "coredns"
-      target_revision = "1.43.0"
+      target_revision = "1.43.3"
 
       helm {
         value_files = ["$values/coredns/values.yaml"]

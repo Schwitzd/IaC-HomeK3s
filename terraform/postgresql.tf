@@ -59,7 +59,7 @@ resource "argocd_application" "cnpg_operator" {
     source {
       repo_url        = "https://cloudnative-pg.github.io/charts"
       chart           = "cloudnative-pg"
-      target_revision = "0.25.0"
+      target_revision = "0.26.0"
 
       helm {
         value_files = ["$values/cnpg-operator/values.yaml"]

@@ -38,7 +38,7 @@ resource "argocd_application" "paperless_ngx" {
     source {
       repo_url        = "codeberg.org/wrenix/helm-charts"
       chart           = "paperless-ngx"
-      target_revision = "0.2.2"
+      target_revision = "0.2.7"
 
       helm {
         value_files = ["$values/paperless-ngx/values.yaml"]

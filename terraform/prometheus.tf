@@ -12,7 +12,7 @@ resource "argocd_application" "prometheus" {
     source {
       repo_url        = "https://prometheus-community.github.io/helm-charts"
       chart           = "kube-prometheus-stack"
-      target_revision = "75.15.1"
+      target_revision = "77.6.1"
       helm {
         value_files = ["$values/prometheus/values.yaml"]
       }

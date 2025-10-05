@@ -32,7 +32,7 @@ resource "argocd_application" "traefik" {
     source {
       repo_url        = "https://traefik.github.io/charts"
       chart           = "traefik"
-      target_revision = "37.0.0"
+      target_revision = "37.1.1"
 
       helm {
         value_files = ["$values/traefik/values.yaml"]

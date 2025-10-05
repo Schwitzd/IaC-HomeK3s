@@ -30,7 +30,7 @@ resource "argocd_application" "pgadmin" {
     source {
       repo_url        = "https://helm.runix.net"
       chart           = "pgadmin4"
-      target_revision = "1.46.0"
+      target_revision = "1.50.0"
 
       helm {
         value_files = ["$values/pgadmin/values.yaml"]

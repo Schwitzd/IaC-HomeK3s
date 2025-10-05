@@ -10,7 +10,7 @@ resource "argocd_application" "trust_manager" {
     source {
       repo_url        = "https://charts.jetstack.io"
       chart           = "trust-manager"
-      target_revision = "0.18.0"
+      target_revision = "0.19.0"
 
       helm {
         value_files = ["$values/trust-manager/values.yaml"]

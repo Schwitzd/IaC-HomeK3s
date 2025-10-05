@@ -10,7 +10,7 @@ resource "argocd_application" "rook_ceph_operator" {
     source {
       repo_url        = "https://charts.rook.io/release"
       chart           = "rook-ceph"
-      target_revision = "1.17.6"
+      target_revision = "1.18.2"
 
       helm {
         value_files = ["$values/rook-ceph-operator/values.yaml"]
@@ -34,6 +34,10 @@ resource "argocd_application" "rook_ceph_operator" {
         self_heal   = true
         allow_empty = false
       }
+
+      sync_options = [
+        "ServerSideApply=true"
+      ]
 
       retry {
         limit = "5"
@@ -71,7 +75,7 @@ resource "argocd_application" "rook_ceph_cluster" {
     source {
       repo_url        = "https://charts.rook.io/release"
       chart           = "rook-ceph-cluster"
-      target_revision = "1.17.6"
+      target_revision = "1.18.2"
 
       helm {
         value_files = ["$values/rook-ceph-cluster/values.yaml"]
