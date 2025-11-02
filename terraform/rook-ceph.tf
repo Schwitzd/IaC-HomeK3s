@@ -10,7 +10,7 @@ resource "argocd_application" "rook_ceph_operator" {
     source {
       repo_url        = "https://charts.rook.io/release"
       chart           = "rook-ceph"
-      target_revision = "1.18.2"
+      target_revision = "1.18.4"
 
       helm {
         value_files = ["$values/rook-ceph-operator/values.yaml"]
@@ -75,7 +75,7 @@ resource "argocd_application" "rook_ceph_cluster" {
     source {
       repo_url        = "https://charts.rook.io/release"
       chart           = "rook-ceph-cluster"
-      target_revision = "1.18.2"
+      target_revision = "1.18.4"
 
       helm {
         value_files = ["$values/rook-ceph-cluster/values.yaml"]

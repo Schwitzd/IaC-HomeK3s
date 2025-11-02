@@ -15,7 +15,7 @@ resource "argocd_application" "garage" {
 
     source {
       repo_url        = "https://git.deuxfleurs.fr/Deuxfleurs/garage.git"
-      target_revision = "main-v2"
+      target_revision = "b43f309ec7"
       path            = "script/helm/garage"
 
       helm {

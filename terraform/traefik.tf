@@ -3,7 +3,7 @@ resource "helm_release" "traefik" {
   namespace       = kubernetes_namespace.namespaces["infrastructure"].metadata[0].name
   chart           = "traefik"
   repository      = "https://traefik.github.io/charts"
-  version         = "36.2.0"
+  version         = "37.1.2"
   cleanup_on_fail = true
 
   values = [
@@ -32,7 +32,7 @@ resource "argocd_application" "traefik" {
     source {
       repo_url        = "https://traefik.github.io/charts"
       chart           = "traefik"
-      target_revision = "37.1.1"
+      target_revision = "37.1.2"
 
       helm {
         value_files = ["$values/traefik/values.yaml"]

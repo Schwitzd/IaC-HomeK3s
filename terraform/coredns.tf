@@ -3,7 +3,7 @@ resource "helm_release" "coredns" {
   namespace       = "kube-system"
   repository      = "https://coredns.github.io/helm"
   chart           = "coredns"
-  version         = "1.43.0"
+  version         = "1.44.3"
   cleanup_on_fail = true
 
   values = [
@@ -27,7 +27,7 @@ resource "argocd_application" "coredns" {
     source {
       repo_url        = "https://coredns.github.io/helm"
       chart           = "coredns"
-      target_revision = "1.43.3"
+      target_revision = "1.44.3"
 
       helm {
         value_files = ["$values/coredns/values.yaml"]

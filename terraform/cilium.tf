@@ -4,14 +4,14 @@ resource "helm_release" "cilium" {
   namespace  = "kube-system"
   repository = "https://helm.cilium.io/"
   chart      = "cilium"
-  version    = "1.18.0-rc.1"
+  version    = "1.18.2"
 
   values = [
     yamlencode(yamldecode(templatefile("${path.module}/cilium-values.yaml", {
       cluster_ipv4_cidr        = "10.42.0.0/16"
       cluster_ipv6_cidr        = "fd22:2025:6a6a:42::/104"
       ipv6_native_routing_cidr = "fd22:2025:6a6a:42::/104"
-      k8s_service_host         = "192.168.14.3"
+      k8s_service_host         = "192.168.14.4"
       k8s_service_port         = "6443"
     })))
   ]
@@ -54,7 +54,7 @@ resource "argocd_application" "cilium" {
     source {
       repo_url        = "https://helm.cilium.io"
       chart           = "cilium"
-      target_revision = "1.18.1"
+      target_revision = "1.18.2"
 
       helm {
         value_files = ["$values/cilium/values.yaml"]
