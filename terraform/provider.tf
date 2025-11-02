@@ -3,19 +3,21 @@ terraform {
     kubernetes = {
       source = "hashicorp/kubernetes"
     }
+
     argocd = {
       source = "argoproj-labs/argocd"
     }
-#    garage2 = {
-#      source = "ceski23/garage2"
-#      version = "0.1.1"
-#    }
+
+    garage = {
+      source = "schwitzd/garage"
+    }
   }
 }
 
 provider "kubernetes" {
-  config_path = "~/.kube/config"
-  insecure    = true
+  config_path    = "~/.kube/config"
+  config_context = "default"
+  insecure       = true
 }
 
 provider "vault" {
@@ -26,8 +28,9 @@ provider "vault" {
 
 provider "helm" {
   kubernetes = {
-    config_path = "~/.kube/config"
-    insecure    = true
+    config_path    = "~/.kube/config"
+    config_context = "default"
+    insecure       = true
   }
 }
 
@@ -37,8 +40,8 @@ provider "argocd" {
   password    = data.vault_generic_secret.argocd.data["password"]
 }
 
-#provider "garage2" {
-#  host   = "${data.vault_generic_secret.redis.data.s3_endpoint}:3903"
-#  scheme = "https"
-#  token  = "bd6751b4108b4538b1f9f06253aae20b53d63657b22f5fd3e3816faa86e76fb6"
-#}
+provider "garage" {
+  host   = data.vault_generic_secret.garage.data["admin_endpoint"]
+  scheme = "https"
+  token  = data.vault_generic_secret.garage.data["admin_token"]
+}
