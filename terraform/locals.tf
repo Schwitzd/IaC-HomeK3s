@@ -1,14 +1,14 @@
 locals {
   namespaces = [
     "observability", "services", "database", "registry", "stocks", "productivity",
-    "argocd", "infrastructure", "ai", "cattle-system", "rook-ceph", "storage"
+    "argocd", "infrastructure", "ai", "cattle-system", "rook-ceph", "storage", "pki"
   ]
 
   # Argo CD - Projects
   argocd_projects = {
     cilium = {
       description = "eBPF-based networking policy managed with Cilium "
-      namespaces  = ["kube-system", "cilium-secrets", "infrastructure", "database", "stocks", "cattle-system", "services", "observability", "storage", "rook-ceph", "productivity"]
+      namespaces  = ["kube-system", "cilium-secrets", "infrastructure", "database", "stocks", "cattle-system", "services", "observability", "storage", "rook-ceph", "productivity", "pki"]
       source_repos = [
         argocd_repository.repos["github_gitops"].repo,
         argocd_repository.repos["cilium_helm"].repo
@@ -129,6 +129,24 @@ locals {
       source_repos = [
         argocd_repository.repos["github_gitops"].repo,
         argocd_repository.repos["paperless_helm"].repo
+      ]
+    },
+    pki = {
+      description = "Internal PKI for issuing and distributing TLS certs"
+      namespaces  = ["pki", "kube-system"]
+      source_repos = [
+        argocd_repository.repos["github_gitops"].repo,
+        argocd_repository.repos["cert-manager_helm"].repo
+      ]
+      cluster_resource_whitelist = [
+        { group = "", kind = "Namespace" },
+        { group = "rbac.authorization.k8s.io", kind = "ClusterRole" },
+        { group = "rbac.authorization.k8s.io", kind = "ClusterRoleBinding" },
+        { group = "admissionregistration.k8s.io", kind = "MutatingWebhookConfiguration" },
+        { group = "admissionregistration.k8s.io", kind = "ValidatingWebhookConfiguration" },
+        { group = "apiextensions.k8s.io", kind = "CustomResourceDefinition" },
+        { group = "cert-manager.io", kind = "ClusterIssuer" },
+        { group = "trust.cert-manager.io", kind = "Bundle" }
       ]
     }
   }
