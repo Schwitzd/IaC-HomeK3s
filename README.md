@@ -13,16 +13,14 @@ The following tools form the foundation of the cluster's provisioning, configura
 - **Helm** – Handles installation and configuration of complex applications via reusable charts.
 - **Kubernetes Manifests** – Define workloads, services, ingress rules, and other cluster resources in YAML.
 
-Here’s your updated **Cluster Components** section with a short, natural mention of your MikroTik-based home network and the link to your router configuration:
-
 ## Cluster components
 
 The cluster consists of three physical nodes:
 
-- 🐮 **cow** – Raspberry Pi 5 (8GB RAM)
+- 🐑 **sheep** – Raspberry Pi 5 (16GB RAM)
   Acts as the **control-plane** node, managing cluster state and system components.
 
-- 🐑 **sheep** – Raspberry Pi 5 (16GB RAM)
+- 🐮 **cow** – Raspberry Pi 5 (8GB RAM)
   Serves as a general-purpose worker, running core services and lightweight workloads.
 
 - 🦆 **duck** – Lenovo ThinkCentre M910q (i7, 32GB RAM)
@@ -57,6 +55,8 @@ The Kubernetes **Pod and Service CIDRs** are defined for both address families:
 |------------------|----------------------|-----------------------------|
 | Cluster Pods     | `10.42.0.0/16`       | `fd22:2025:6a6a:42::/104`   |
 | Cluster Services | `10.43.0.0/16`       | `fd22:2025:6a6a:43::/112`   |
+
+The cluster operates under the `home.schwitzd.me` subdomain, delegated from the primary `schwitzd.me` zone. All internal services are exposed using FQDNs such as `pgadmin.home.schwitzd.me` and `grafana.home.schwitzd.me`.
 
 ## Storage
 
@@ -125,7 +125,7 @@ Once K3s is installed, run the following Ansible tags in order:
 - k3s-cilium
 - k3s-rook-ceph
 - k3s-post
-- k3s-config, k3s-aliases
+- k3s-config,k3s-aliases
 - shutdown-startup
 
 Once Kubernetes has been installed and all the Ansible tags applied, we can start deploying resources to the cluster.
@@ -189,7 +189,7 @@ echo "source <(kubectl completion bash)" >> ~/.bashrc
 source ~/.bashrc
 ```
 
-Once the **control-plane** node is installed, you will notice that it is in the `NotReady` state.This is expected, because no **CNI** is installed at this stage. To resolve this **Cilium** must be deployed to the cluster. But before doing this making sure that at least one **worker** node is already joined to the cluster so **Cilium** pods can be scheduled successfully.
+Once the **control-plane** node is installed, you will notice that it is in the `NotReady` state. This is expected, because no **CNI** is installed at this stage. To resolve this **Cilium** must be deployed to the cluster. But before doing this making sure that at least one **worker** node is already joined to the cluster so **Cilium** pods can be scheduled successfully.
 
 First, go back to the [K3s Pre-requirements](#k3s-pre-requirements) section to provision the missing tags, then proceed with the deployment of **Cilium**.
 
@@ -234,10 +234,10 @@ Once Argo CD is available, bring it under the management of GitOps, including th
 
 ```sh
 # Cilium deployment in Argo CD
-tofu apply --var-file=variables.tfvars --target=Argo CD_application.cilium
+tofu apply --var-file=variables.tfvars --target=argocd_application.cilium
 
 # Cilium network policies
-tofu apply --var-file=variables.tfvars --target=Argo CD_application.cilium_policies
+tofu apply --var-file=variables.tfvars --target=argocd_application.cilium_policies
 ```
 
 > ⚠️ **Keep in mind:** at this stage, the previous command only allows fundamental policies that enable the core services of the cluster to communicate with each other. However, I expect that some **Cilium policy violations** will occur. Please refer to the troubleshooting section, [Cilium network policies](#cilium-network-policies), for guidance on identifying and resolving these issues.
@@ -258,7 +258,7 @@ tofu apply --var-file=variables.tfvars --target=helm_release.coredns
 Then import it into Argo CD:
 
 ```sh
-tofu apply --var-file=variables.tfvars --target=Argo CD_application.coredns
+tofu apply --var-file=variables.tfvars --target=argocd_application.coredns
 ```
 
 ### Certificates
@@ -276,9 +276,8 @@ To deploy **Cert-Manager** and the `ClusterIssuer` correctly:
 # Step 1: Install Cert-Manager with CRDs
 tofu apply --var-file=variables.tfvars --target=helm_release.cert_manager
 
-# Step 2: Deploy ClusterIssuer (public domain) and the internal CA Issuer
+# Step 2: Deploy ClusterIssuer public domain
 tofu apply --var-file=variables.tfvars --target=kubernetes_manifest.le_clusterissuer
-tofu apply --var-file=variables.tfvars --target=kubernetes_manifest.internal_ca_issuer
 ```
 
 > **Note**: `depends_on` is not sufficient here because OpenTofu resolves CRDs during the planning phase, not at apply time.
@@ -296,6 +295,7 @@ Because the internal **Farm CA** (the cluster's private certificate authority) i
 1. Create the bootstrap `ClusterIssuer` by adding the file `clusterissuer-selfsigned-bootstrap.yaml` to the GitOps repo:
 
     ```yaml
+    ---
     apiVersion: cert-manager.io/v1
     kind: ClusterIssuer
     metadata:
@@ -410,7 +410,7 @@ tofu apply --var-file=variables.tfvars --target=helm_release.traefik
 Later, import it into Argo CD:
 
 ```sh
-tofu apply --var-file=variables.tfvars --target=Argo CD_application.traefik
+tofu apply --var-file=variables.tfvars --target=argocd_application.traefik
 ```
 
 The diagram below illustrates how external traffic reaches workloads in the cluster using **Cilium** for LoadBalancer IP management and **Traefik** as the Ingress Controller:
@@ -467,8 +467,8 @@ Rook-Ceph is deployed using **Argo CD** and is composed of two main components:
 - **The Cluster**, which defines how Ceph itself is configured — including monitors, OSDs, storage pools, and more.
 
 ```sh
-tofu apply --var-file=variables.tfvars --target=Argo CD_application.rook_ceph_operator
-tofu apply --var-file=variables.tfvars --target=Argo CD_application.rook_ceph_cluster
+tofu apply --var-file=variables.tfvars --target=argocd_application.rook_ceph_operator
+tofu apply --var-file=variables.tfvars --target=argocd_application.rook_ceph_cluster
 ```
 
 ### Garage
@@ -502,10 +502,10 @@ Deployment follows the usual pattern:
 
 ```sh
 # Deploy the operator
-tofu apply --var-file=variables.tfvars --target=Argo CD_application.cnpg_operator
+tofu apply --var-file=variables.tfvars --target=argocd_application.cnpg_operator
 
 # Deploy your PostgreSQL cluster
-tofu apply --var-file=variables.tfvars --target=Argo CD_application.cnpg_cluster
+tofu apply --var-file=variables.tfvars --target=argocd_application.cnpg_cluster
 ```
 
 ### Observability stack
