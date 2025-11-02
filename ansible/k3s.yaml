@@ -4,7 +4,7 @@
   become: true
 
   vars:
-    k3s_api_fqdn: k3s.schwitzd.me
+    k3s_api_fqdn: k3s.home.schwitzd.me
     ceph_disk: /dev/nvme0n1
 
   roles:
@@ -18,9 +18,9 @@
       vars:
         repos:
           - name: "helm"
-            repo: "deb [arch=arm64 signed-by=/etc/apt/keyrings/helm.gpg] https://baltocdn.com/helm/stable/debian/ all main"
+            repo: "deb [arch=arm64 signed-by=/etc/apt/keyrings/helm.gpg] https://packages.buildkite.com/helm-linux/helm-debian/any/ any main"
             filename: "helm-stable-debian"
-            key_url: "https://baltocdn.com/helm/signing.asc"
+            key_url: "https://packages.buildkite.com/helm-linux/helm-debian/gpgkey"
             key_file: "helm.gpg"
           - name: "kubernetes"
             repo: "deb [arch=arm64 signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.33/deb/ /"
@@ -31,7 +31,7 @@
 
     - role: githubixx.cilium_cli
       vars:
-        cilium_cli_version: "0.18.5"
+        cilium_cli_version: "0.18.7"
         cilium_cli_arch: "arm64"
       when: role == "control-plane"
       tags: k3s-cilium

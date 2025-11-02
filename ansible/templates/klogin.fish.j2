@@ -5,7 +5,7 @@ function klogin
     end
 
     set -l host $argv[1]
-    set -l fqdn "$host.schwitzd.me"
+    set -l fqdn "$host.home.schwitzd.me"
     set -l key  "$HOME/.ssh/$host.schwitzd.me_ed25519"
 
     # Run kubectl, then keep the session open with a login shell
