@@ -9,12 +9,12 @@ resource "helm_release" "argocd" {
   namespace       = kubernetes_namespace.namespaces["argocd"].metadata[0].name
   chart           = "argo-cd"
   repository      = "https://argoproj.github.io/argo-helm"
-  version         = "8.3.6"
+  version         = "9.0.5"
   cleanup_on_fail = true
 
   values = [
     yamlencode(yamldecode(templatefile("${path.module}/argocd-values.yaml", {
-      argocd_domain                = "argocd.schwitzd.me"
+      argocd_domain                = "argocd.home.schwitzd.me"
       argocd_server_admin_password = bcrypt(data.vault_generic_secret.argocd.data["password"])
     })))
   ]
