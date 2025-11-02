@@ -1,32 +1,52 @@
+---
 apiVersion: "cilium.io/v2"
 kind: CiliumNetworkPolicy
 metadata:
-  namespace: infrastructure
-  name: "cert-manager-webhook"
+  name: "webhook"
+  namespace: pki
 spec:
+  description: "Allow webhook ingress from cluster components and Prometheus scrapes, and egress to Kubernetes API"
   endpointSelector:
     matchLabels:
       app.kubernetes.io/name: webhook
+
   ingress:
+    # Allow connections from host
     - fromEntities:
         - host
       toPorts:
         - ports:
             - port: "6080"
               protocol: TCP
+
+    # Allow connections from Kubernetes API server
     - fromEntities:
         - kube-apiserver
       toPorts:
         - ports:
             - port: "10250"
               protocol: TCP
+
+    # Allow connections from remote nodes
     - fromEntities:
         - remote-node
       toPorts:
         - ports:
             - port: "10250"
               protocol: TCP
+
+    # Allow scrapes from Prometheus
+    - fromEndpoints:
+        - matchLabels:
+            app.kubernetes.io/name: prometheus
+            k8s:io.kubernetes.pod.namespace: observability
+      toPorts:
+        - ports:
+            - port: "9402"
+              protocol: TCP
+
   egress:
+    # Allow connections to Kubernetes API
     - toEntities:
         - kube-apiserver
       toPorts:

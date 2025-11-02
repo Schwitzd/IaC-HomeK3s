@@ -1,14 +1,16 @@
 apiVersion: "cilium.io/v2"
 kind: CiliumClusterwideNetworkPolicy
 metadata:
-  name: hubble-relay
+  name: "hubble-relay"
 spec:
+  description: "Hubble Relay network policy."
   endpointSelector:
     matchLabels:
       app.kubernetes.io/name: hubble-relay
       k8s:io.kubernetes.pod.namespace: kube-system
 
   ingress:
+    # Allow connections from Hubble UI
     - fromEndpoints:
         - matchLabels:
             app.kubernetes.io/name: hubble-ui
@@ -21,6 +23,7 @@ spec:
               protocol: TCP
 
   egress:
+    # Allow connections to cluster components
     - toEntities:
         - host
         - remote-node

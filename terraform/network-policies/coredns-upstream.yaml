@@ -3,13 +3,16 @@ kind: CiliumClusterwideNetworkPolicy
 metadata:
   name: "coredns-upstream"
 spec:
-  description: "Allow CoreDNS to reach upstream DNS and K8s API"
+  description: "CoreDNS egress policy for upstream services."
   endpointSelector:
     matchLabels:
       k8s:io.kubernetes.pod.namespace: kube-system
       app.kubernetes.io/name: coredns
+
+  ingress: []
+
   egress:
-    # Upstream DNS
+    # Allow access to upstream DNS servers
     - toCIDR:
         - 192.168.14.1/32
         - fd12:3456:789a:14::1/128
@@ -17,7 +20,8 @@ spec:
         - ports:
             - port: "53"
               protocol: UDP
-    # Allow to kube-apiserver
+
+    # Allow access to Kubernetes API
     - toEntities:
         - kube-apiserver
       toPorts:

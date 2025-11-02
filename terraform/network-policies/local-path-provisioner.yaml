@@ -1,18 +1,24 @@
+---
 apiVersion: "cilium.io/v2"
 kind: CiliumNetworkPolicy
 metadata:
-  name: local-path-provisioner
+  name: "local-path-provisioner"
   namespace: kube-system
 spec:
+  description: "Allow local-path-provisioner egress to host and Kubernetes API"
   endpointSelector:
     matchLabels:
       k8s:io.kubernetes.pod.namespace: kube-system
       app: local-path-provisioner
+
+  ingress: []
+
   egress:
-  - toEntities:
-    - host
-    - kube-apiserver
-    toPorts:
-    - ports:
-      - port: "6443"
-        protocol: TCP
+    # Allow connections to host and Kubernetes API
+    - toEntities:
+        - host
+        - kube-apiserver
+      toPorts:
+        - ports:
+            - port: "6443"
+              protocol: TCP

@@ -3,12 +3,17 @@ kind: CiliumClusterwideNetworkPolicy
 metadata:
   name: "health-checks"
 spec:
+  description: "Health checks policy."
   endpointSelector:
     matchLabels:
       'reserved:health': ''
+
   ingress:
+    # Allow health checks from remote nodes
     - fromEntities:
-      - remote-node
+        - remote-node
+
   egress:
+    # Allow health checks to remote nodes
     - toEntities:
-      - remote-node
+        - remote-node

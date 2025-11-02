@@ -1,34 +1,42 @@
+---
 apiVersion: "cilium.io/v2"
 kind: CiliumNetworkPolicy
 metadata:
-  name: metrics-server
+  name: "metrics-server"
   namespace: kube-system
 spec:
+  description: "Allow metrics-server ingress and egress for kubelet and API access"
   endpointSelector:
     matchLabels:
       k8s:io.kubernetes.pod.namespace: kube-system
       k8s-app: metrics-server
+
   ingress:
-  - fromEntities:
-    - host
-    - remote-node
-    - kube-apiserver
-    toPorts:
-    - ports:
-      - port: "10250"
-        protocol: TCP
+    # Allow connections from cluster components
+    - fromEntities:
+        - host
+        - remote-node
+        - kube-apiserver
+      toPorts:
+        - ports:
+            - port: "10250"
+              protocol: TCP
+
   egress:
-  - toEntities:
-    - host
-    - kube-apiserver
-    - remote-node
-    toPorts:
-    - ports:
-      - port: "10250"
-        protocol: TCP
-  - toEntities:
-    - kube-apiserver
-    toPorts:
-    - ports:
-      - port: "6443"
-        protocol: TCP
+    # Allow connections to cluster components
+    - toEntities:
+        - host
+        - kube-apiserver
+        - remote-node
+      toPorts:
+        - ports:
+            - port: "10250"
+              protocol: TCP
+
+    # Allow connections to Kubernetes API
+    - toEntities:
+        - kube-apiserver
+      toPorts:
+        - ports:
+            - port: "6443"
+              protocol: TCP

@@ -1,15 +1,16 @@
 apiVersion: "cilium.io/v2"
 kind: CiliumClusterwideNetworkPolicy
 metadata:
-  name: hubble-ui
+  name: "hubble-ui"
 spec:
-  description: "Allow Traefik ingress to Hubble UI and required egress"
+  description: "Hubble UI network policy."
   endpointSelector:
     matchLabels:
       app.kubernetes.io/name: hubble-ui
       k8s:io.kubernetes.pod.namespace: kube-system
+
   ingress:
-    # Allow from Traefik
+    # Allow connections from Traefik
     - fromEndpoints:
         - matchLabels:
             app.kubernetes.io/name: traefik
@@ -18,8 +19,9 @@ spec:
         - ports:
             - port: "8081"
               protocol: TCP
+
   egress:
-    # Allow to hubble-relay
+    # Allow connections to Hubble Relay
     - toEndpoints:
         - matchLabels:
             app.kubernetes.io/name: hubble-relay
@@ -30,7 +32,8 @@ spec:
               protocol: TCP
             - port: "80"
               protocol: TCP
-    # Allow to kube-apiserver
+
+    # Allow connections to Kubernetes API
     - toEntities:
         - kube-apiserver
       toPorts:

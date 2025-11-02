@@ -1,16 +1,31 @@
+---
 apiVersion: "cilium.io/v2"
 kind: CiliumNetworkPolicy
 metadata:
-  namespace: infrastructure
-  name: "cert-manager-cainjector"
+  name: "cainjector"
+  namespace: pki
 spec:
+  description: "Allow cainjector egress to Kubernetes API and Prometheus scrapes"
   endpointSelector:
     matchLabels:
       app.kubernetes.io/name: cainjector
+
+  ingress:
+    # Allow scrapes from Prometheus
+    - fromEndpoints:
+        - matchLabels:
+            app.kubernetes.io/name: prometheus
+            k8s:io.kubernetes.pod.namespace: observability
+      toPorts:
+        - ports:
+            - port: "9402"
+              protocol: TCP
+
   egress:
-  - toEntities:
-    - kube-apiserver
-    toPorts:
-      - ports:
-        - port: "6443"
-          protocol: TCP
+    # Allow connections to Kubernetes API
+    - toEntities:
+        - kube-apiserver
+      toPorts:
+        - ports:
+            - port: "6443"
+              protocol: TCP

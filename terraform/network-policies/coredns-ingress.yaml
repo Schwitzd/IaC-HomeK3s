@@ -3,22 +3,36 @@ kind: CiliumClusterwideNetworkPolicy
 metadata:
   name: "coredns-pods-ingress"
 spec:
-  description: "Allow all pods and remote-nodes to access CoreDNS UDP/53"
+  description: "CoreDNS ingress policy"
   endpointSelector:
     matchLabels:
       k8s:io.kubernetes.pod.namespace: kube-system
       app.kubernetes.io/name: coredns
+
   ingress:
-    # Allow from all pods
+    # Allow requests from all pods
     - fromEndpoints:
         - {}
       toPorts:
         - ports:
             - port: "53"
               protocol: UDP
-    # Allow from remote nodes
+
+    # Allow metrics scrapes from Prometheus
+    - fromEndpoints:
+        - matchLabels:
+            app.kubernetes.io/name: prometheus
+            k8s:io.kubernetes.pod.namespace: observability
+      toPorts:
+        - ports:
+            - port: "9153"
+              protocol: TCP
+
+    # Allow requests from remote nodes
     - fromEntities: [remote-node]
       toPorts:
         - ports:
             - port: "53"
               protocol: UDP
+
+  egress: []

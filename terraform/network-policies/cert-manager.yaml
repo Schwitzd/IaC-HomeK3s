@@ -1,31 +1,49 @@
+---
 apiVersion: "cilium.io/v2"
 kind: CiliumNetworkPolicy
 metadata:
-  namespace: infrastructure
-  name: "cert-manager-policy"
+  name: "cert-manager"
+  namespace: pki
 spec:
+  description: "Allow cert-manager ingress for metrics and egress to Kubernetes API and external services"
   endpointSelector:
     matchLabels:
       app.kubernetes.io/name: cert-manager
+
   ingress:
-  - fromEntities:
-      - host
-    toPorts:
-    - ports:
-      - port: "9403"
-        protocol: TCP
+    # Allow connections from host
+    - fromEntities:
+        - host
+      toPorts:
+        - ports:
+            - port: "9403"
+              protocol: TCP
+
+    # Allow scrapes from Prometheus
+    - fromEndpoints:
+        - matchLabels:
+            app.kubernetes.io/name: prometheus
+            k8s:io.kubernetes.pod.namespace: observability
+      toPorts:
+        - ports:
+            - port: "9402"
+              protocol: TCP
+
   egress:
-  - toEntities:
-    - kube-apiserver
-    toPorts:
-      - ports:
-        - port: "6443"
-          protocol: TCP
-  - toEntities:
-    - world
-    toPorts:
-      - ports:
-        - port: "443"
-          protocol: TCP
-        - port: "53"
-          protocol: UDP
+    # Allow connections to Kubernetes API
+    - toEntities:
+        - kube-apiserver
+      toPorts:
+        - ports:
+            - port: "6443"
+              protocol: TCP
+
+    # Allow connections to external services
+    - toEntities:
+        - world
+      toPorts:
+        - ports:
+            - port: "443"
+              protocol: TCP
+            - port: "53"
+              protocol: UDP
