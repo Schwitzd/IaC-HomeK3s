@@ -101,8 +101,7 @@ resource "argocd_application" "cnpg_operator" {
 
   depends_on = [
     kubernetes_namespace.namespaces["database"],
-    helm_release.argocd,
-    argocd_project.projects["database"]
+    helm_release.argocd
   ]
 }
 
@@ -167,7 +166,6 @@ resource "argocd_application" "cnpg_cluster" {
   depends_on = [
     kubernetes_namespace.namespaces["database"],
     helm_release.argocd,
-    argocd_project.projects["database"],
     argocd_application.cnpg_operator,
     kubernetes_secret.postgresql_superuser,
     kubernetes_secret.postgresql_roles

@@ -74,7 +74,6 @@ resource "argocd_application" "pgadmin" {
   depends_on = [
     kubernetes_namespace.namespaces["database"],
     helm_release.argocd,
-    argocd_project.projects["database"],
     kubernetes_secret.pgadmin,
     argocd_application.rook_ceph_cluster
   ]

@@ -81,7 +81,6 @@ resource "argocd_application" "paperless_ngx" {
 
   depends_on = [
     helm_release.argocd,
-    argocd_project.projects["productivity"],
     kubernetes_secret.paperless_external_db,
     kubernetes_secret.paperless_external_redis,
     argocd_application.cnpg_cluster,

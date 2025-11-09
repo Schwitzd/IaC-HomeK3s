@@ -76,8 +76,7 @@ resource "argocd_application" "ark_website_backend" {
 
   depends_on = [
     helm_release.argocd,
-    kubernetes_secret.ark_website_backend_secret,
-    argocd_project.projects["stocks"]
+    kubernetes_secret.ark_website_backend_secret
   ]
 }
 
@@ -127,7 +126,6 @@ resource "argocd_application" "ark_website_frontend" {
 
   depends_on = [
     helm_release.argocd,
-    argocd_project.projects["stocks"],
     kubernetes_secret.ark_website_frontend_secret,
     argocd_application.ark_website_backend
   ]

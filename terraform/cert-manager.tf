@@ -133,8 +133,7 @@ resource "argocd_application" "cert_manager" {
   }
 
   depends_on = [
-    helm_release.argocd,
-    argocd_project.projects["pki"]  
+    helm_release.argocd
   ]
 }
 
@@ -186,7 +185,6 @@ resource "argocd_application" "farm_ca" {
   }
 
   depends_on = [
-    helm_release.argocd,
-    argocd_project.projects["pki"]
+    helm_release.argocd
   ]
 }

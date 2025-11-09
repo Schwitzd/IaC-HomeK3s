@@ -58,8 +58,7 @@ resource "argocd_application" "rook_ceph_operator" {
 
   depends_on = [
     helm_release.argocd,
-    kubernetes_namespace.namespaces["rook-ceph"],
-    argocd_project.projects["rook-ceph"]
+    kubernetes_namespace.namespaces["rook-ceph"]
   ]
 }
 
@@ -120,7 +119,6 @@ resource "argocd_application" "rook_ceph_cluster" {
   depends_on = [
     helm_release.argocd,
     kubernetes_namespace.namespaces["rook-ceph"],
-    argocd_project.projects["rook-ceph"],
     argocd_application.rook_ceph_operator
   ]
 }

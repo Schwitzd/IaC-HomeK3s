@@ -24,41 +24,98 @@ resource "helm_release" "argocd" {
   ]
 }
 
-# ArgoCD projects
-resource "argocd_project" "projects" {
-  for_each = local.argocd_projects
-
+resource "argocd_application" "argocd" {
   metadata {
-    name      = each.key
-    namespace = kubernetes_namespace.namespaces["argocd"].metadata[0].name
+    name      = "argocd"
+    namespace = "argocd"
   }
 
   spec {
-    description  = each.value.description
-    source_repos = each.value.source_repos
+    project = "default"
+    source {
+      repo_url        = "https://argoproj.github.io/argo-helm"
+      chart           = "argo-cd"
+      target_revision = "9.1.0"
 
-    dynamic "destination" {
-      for_each = each.value.namespaces
-      content {
-        server    = "https://kubernetes.default.svc"
-        namespace = destination.value
+      helm {
+        value_files = ["$values/argocd/values.yaml"]
       }
     }
 
-    dynamic "cluster_resource_whitelist" {
-      for_each = lookup(each.value, "cluster_resource_whitelist", [])
-      content {
-        group = cluster_resource_whitelist.value.group
-        kind  = cluster_resource_whitelist.value.kind
+    source {
+      repo_url        = argocd_repository.repos["github_gitops"].repo
+      target_revision = "HEAD"
+      ref             = "values"
+      path            = "argocd"
+
+      directory {
+        recurse = true
+      }
+    }
+
+    destination {
+      server    = "https://kubernetes.default.svc"
+      namespace = "argocd"
+    }
+
+    sync_policy {
+      automated {
+        prune       = true
+        self_heal   = true
+        allow_empty = false
+      }
+
+      retry {
+        limit = "5"
+        backoff {
+          duration     = "30s"
+          max_duration = "2m"
+          factor       = "2"
+        }
       }
     }
   }
 
   depends_on = [
-    helm_release.argocd,
-    argocd_repository.repos
+    kubernetes_namespace.namespaces["argocd"]
   ]
 }
+
+# ArgoCD projects - DEPRECATED
+#resource "argocd_project" "projects" {
+#  for_each = local.argocd_projects
+#
+#  metadata {
+#    name      = each.key
+#    namespace = kubernetes_namespace.namespaces["argocd"].metadata[0].name
+#  }
+#
+#  spec {
+#    description  = each.value.description
+#    source_repos = each.value.source_repos
+#
+#    dynamic "destination" {
+#      for_each = each.value.namespaces
+#      content {
+#        server    = "https://kubernetes.default.svc"
+#        namespace = destination.value
+#      }
+#    }
+#
+#    dynamic "cluster_resource_whitelist" {
+#      for_each = lookup(each.value, "cluster_resource_whitelist", [])
+#      content {
+#        group = cluster_resource_whitelist.value.group
+#        kind  = cluster_resource_whitelist.value.kind
+#      }
+#    }
+#  }
+#
+#  depends_on = [
+#    helm_release.argocd,
+#    argocd_repository.repos
+#  ]
+#}
 
 # ArgoCD Repositories
 resource "argocd_repository" "repos" {

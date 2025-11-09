@@ -60,7 +60,6 @@ resource "argocd_application" "garage" {
   depends_on = [
     kubernetes_namespace.namespaces["storage"],
     helm_release.argocd,
-    argocd_project.projects["infrastructure"],
     argocd_application.rook_ceph_cluster
   ]
 }

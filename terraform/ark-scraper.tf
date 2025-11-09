@@ -69,7 +69,6 @@ resource "argocd_application" "ark_scraper" {
 
   depends_on = [
     helm_release.argocd,
-    argocd_project.projects["stocks"],
     argocd_application.cnpg_cluster,
     kubernetes_secret.ark_scraper
   ]

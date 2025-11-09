@@ -58,7 +58,6 @@ resource "argocd_application" "ark_analyzer" {
   }
   depends_on = [
     helm_release.argocd,
-    argocd_project.projects["stocks"],
     kubernetes_secret.ark_analyzer_secret,
     argocd_application.cnpg_cluster
   ]

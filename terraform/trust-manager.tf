@@ -53,7 +53,6 @@ resource "argocd_application" "trust_manager" {
 
   depends_on = [
     helm_release.argocd,
-    argocd_project.projects["pki"],
     argocd_application.cert_manager,
     argocd_application.farm_ca
   ]

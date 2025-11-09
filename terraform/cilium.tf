@@ -92,7 +92,6 @@ resource "argocd_application" "cilium" {
 
   depends_on = [
     helm_release.argocd,
-    argocd_project.projects["cilium"],
     kubernetes_manifest.cilium_ip,
     kubernetes_manifest.cilium_l2
   ]

@@ -104,7 +104,6 @@ resource "argocd_application" "harbor" {
 
   depends_on = [
     helm_release.argocd,
-    argocd_project.projects["registry"],
     kubernetes_secret.harbor_admin,
     kubernetes_secret.harbor_external_db,
     kubernetes_secret.harbor_external_redis,

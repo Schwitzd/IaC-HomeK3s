@@ -50,7 +50,6 @@ resource "argocd_application" "rancher" {
   }
   depends_on = [
     helm_release.argocd,
-    argocd_project.projects["infrastructure"],
     kubernetes_namespace.namespaces["cattle-system"]
   ]
 }

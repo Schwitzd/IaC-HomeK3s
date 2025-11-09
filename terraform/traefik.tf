@@ -73,7 +73,6 @@ resource "argocd_application" "traefik" {
   }
 
   depends_on = [
-    helm_release.argocd,
-    argocd_project.projects["infrastructure"]
+    helm_release.argocd
   ]
 }

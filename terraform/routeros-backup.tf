@@ -81,7 +81,6 @@ resource "argocd_application" "routeros_backup" {
 
   depends_on = [
     kubernetes_secret.routeros_backup_secret,
-    kubernetes_secret.routeros_backup_ssh_key,
-    argocd_project.projects["infrastructure"]
+    kubernetes_secret.routeros_backup_ssh_key
   ]
 }
