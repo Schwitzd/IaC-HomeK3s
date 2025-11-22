@@ -31,7 +31,7 @@ The cluster runs on my **MikroTik-based home network**. See the [network configu
 ## Networking
 
 This cluster is configured as a **dual-stack environment**, supporting both IPv4 and IPv6 across all components.  
-While I don’t strictly need IPv6 in my home network, I saw it as a great opportunity to learn and experiment with it in a real-world setup.
+While I don't strictly need IPv6 in my home network, I saw it as a great opportunity to learn and experiment with it in a real-world setup.
 
 The networking stack is built around **Cilium**, which is responsible for:
 
@@ -57,6 +57,19 @@ The Kubernetes **Pod and Service CIDRs** are defined for both address families:
 | Cluster Services | `10.43.0.0/16`       | `fd22:2025:6a6a:43::/112`   |
 
 The cluster operates under the `home.schwitzd.me` subdomain, delegated from the primary `schwitzd.me` zone. All internal services are exposed using FQDNs such as `pgadmin.home.schwitzd.me` and `grafana.home.schwitzd.me`.
+
+### Secrets handling
+
+The farm relies on two separate secret stores, each with a very different job.
+
+The first one runs on my laptop. It's available right away, before the cluster even exists, and it holds only the minimum secrets I need to bootstrap everything: Argo CD, Azure Key Vault, and OpenBao. The second one is the farm Vault, deployed early in the cluster. Once it's up, it becomes the main place where all workload secrets live. Every app in the farm reads its secrets from here.
+
+This setup keeps the bootstrap simple, while giving the running cluster its own proper secret store.
+
+```sh
+tofu init
+tofu plan
+```
 
 ## Storage
 
@@ -130,32 +143,15 @@ Once K3s is installed, run the following Ansible tags in order:
 
 Once Kubernetes has been installed and all the Ansible tags applied, we can start deploying resources to the cluster.
 
-### Preparing OpenTofu
-
-```sh
-tofu init
-tofu plan
-```
-
 ## K3s
 
 K3s is currently installed manually on each node using the official installation script. While automating this step with Ansible would be ideal, I opted for manual installation due to limited time and haven't yet explored what's already available in the community.
-
-## Deploying resources
-
-This section outlines the recommended order to deploy the **core services** into the K3s cluster.  
-Following this sequence ensures proper service dependencies and seamless integration between networking, ingress, and TLS management components.
-
-Some critical components must be available before **Argo CD** is installed, to support this, they follow a **dual deployment strategy**:
-
- 1. Temporarily deployed using OpenTofu.
- 2. Later imported into Argo CD for full GitOps lifecycle management.
 
 ### Installation
 
 The following sections outline how both the **control-plane** and **worker** nodes are installed using the official K3s script.
 
-```
+```sh
 ## Master node
 export K3S_KUBECONFIG_MODE="644"
 export INSTALL_K3S_EXEC=" --disable-cloud-controller --disable=coredns --disable=servicelb --disable=traefik --secrets-encryption --flannel-backend=none --node-ip=<ipv4>,<ipv6> --cluster-cidr=<ipv4-range>,<ipv6-range> --service-cidr=<ipv4-range>,<ipv6-range> --kube-controller-manager-arg=node-cidr-mask-size-ipv6=120 --disable-network-policy --disable-kube-proxy --tls-san <cluster-fqdn>"
@@ -192,6 +188,17 @@ source ~/.bashrc
 Once the **control-plane** node is installed, you will notice that it is in the `NotReady` state. This is expected, because no **CNI** is installed at this stage. To resolve this **Cilium** must be deployed to the cluster. But before doing this making sure that at least one **worker** node is already joined to the cluster so **Cilium** pods can be scheduled successfully.
 
 First, go back to the [K3s Pre-requirements](#k3s-pre-requirements) section to provision the missing tags, then proceed with the deployment of **Cilium**.
+
+### Deploying resources
+
+This readme describes the recommended order for deploying the **core services** of the K3s farm cluster. These components form the foundation for networking, ingress, and certificate management, so bringing them up in the correct sequence avoids dependency issues.
+
+A small group of essential services must exist before **Argo CD** is available. For these components, I use a **dual deployment strategy**:
+
+1. They are first deployed with OpenTofu to bootstrap the cluster
+1. Once Argo CD is running, they are handed over to GitOps and managed by Argo CD using ApplicationSet controller.
+
+All remaining workloads, everything beyond the core services, are created and managed **exclusively** through the ApplicationSet controller.
 
 ### Secrets management
 
@@ -230,16 +237,6 @@ After deploying **Cilium** itself, we apply the fundamental network policies to 
 tofu apply --var-file=variables.tfvars --target=kubernetes_manifest.network_policies
 ```
 
-Once Argo CD is available, bring it under the management of GitOps, including the network policies:
-
-```sh
-# Cilium deployment in Argo CD
-tofu apply --var-file=variables.tfvars --target=argocd_application.cilium
-
-# Cilium network policies
-tofu apply --var-file=variables.tfvars --target=argocd_application.cilium_policies
-```
-
 > ⚠️ **Keep in mind:** at this stage, the previous command only allows fundamental policies that enable the core services of the cluster to communicate with each other. However, I expect that some **Cilium policy violations** will occur. Please refer to the troubleshooting section, [Cilium network policies](#cilium-network-policies), for guidance on identifying and resolving these issues.
 In addition, at the time of writing, the Hubble UI primarily focuses on pod-to-pod traffic. Dropped traffic originating from the `host` or `remote-node` may not be visible in the UI. For full visibility, including host-level and remote-node policy drops, use the **Hubble CLI**.
 
@@ -253,12 +250,6 @@ Once **Argo CD** is up, bring it under GitOps management:
 
 ```sh
 tofu apply --var-file=variables.tfvars --target=helm_release.coredns
-```
-
-Then import it into Argo CD:
-
-```sh
-tofu apply --var-file=variables.tfvars --target=argocd_application.coredns
 ```
 
 ### Certificates
@@ -281,12 +272,6 @@ tofu apply --var-file=variables.tfvars --target=kubernetes_manifest.le_clusteris
 ```
 
 > **Note**: `depends_on` is not sufficient here because OpenTofu resolves CRDs during the planning phase, not at apply time.
-
-Once **Argo CD** is running, bring **Cert-Manager** and `ClusterIssuer` resources under full GitOps management:
-
-```sh
-tofu apply --var-file=variables.tfvars --target=argocd_application.cert_manager
-```
 
 #### Farm CA
 
@@ -366,8 +351,6 @@ spec:
         farm/sync-ca: "true"
 ```
 
----
-
 Additionally, trust-manager would (by default) distribute the CA secret to every namespace. To restrict this distribution, I use a namespace label, `farm/sync-ca: "true"` to control which namespaces receive the CA:
 
 ```yaml
@@ -407,12 +390,6 @@ Deploy **Traefik** with LoadBalancer configuration:
 tofu apply --var-file=variables.tfvars --target=helm_release.traefik
 ```
 
-Later, import it into Argo CD:
-
-```sh
-tofu apply --var-file=variables.tfvars --target=argocd_application.traefik
-```
-
 The diagram below illustrates how external traffic reaches workloads in the cluster using **Cilium** for LoadBalancer IP management and **Traefik** as the Ingress Controller:
 
 ```mermaid
@@ -441,21 +418,23 @@ graph LR
 
 - **Project and App Management**: Each major category of workload (e.g., databases, observability, system, registry) is isolated into its own Argo CD Project for RBAC and resource scoping. Applications are registered declaratively using OpenTofu, referencing charts and values from either OCI Helm registries or private Git repos (maybe one day I will opensource it).
 
-- **Secrets**: Sensitive values are never stored in Git. Instead, OpenTofu provisions all required Kubernetes Secrets before Argo CD syncs the relevant application. Charts are configured to reference these pre-existing secrets using their existingSecret fields wherever supported.
+- **Deployment**: Workloads are automatically created as **Argo CD** applications using the [ApplicationSet controller](https://argo-cd.readthedocs.io/en/latest/operator-manual/applicationset/), which leverages the [Git generator in file mode](https://argo-cd.readthedocs.io/en/latest/operator-manual/applicationset/Generators-Git/#git-generator-files).
 
-- **Automated Sync**: Most system and core workloads are set to sync automatically. Argo CD will monitor and automatically apply any updates to charts or values files, as well as self-heal if resources drift from the declared state.
+- **Secrets**: Sensitive values are never stored in Git. Instead, OpenTofu provisions all required Kubernetes Secrets before **Argo CD** syncs the relevant application. Charts are configured to reference these pre-existing secrets using their existingSecret fields wherever supported.
 
-To deploy **Argo CD**:
+1. To deploy **Argo CD** first bootstrap a minimal version with Helm:
 
-```sh
-tofu apply --var-file=variables.tfvars --target=helm_release.argocd
-```
+    ```sh
+    tofu apply --var-file=variables.tfvars --target=helm_release.argocd
+    ```
 
-Then, create all Argo CD Projects and assign their associated repositories:
+1. Once deployed we will manage **Argo CD** by itself:
 
-```sh
-tofu apply --var-file=variables.tfvars --target=argocd_project.projects
-```
+    ```sh
+    tofu apply --var-file=variables.tfvars --target=argocd_application.argocd
+    ```
+
+You can find details about how I'm using ApplicationSet to deploy workloads on my blog post.
 
 ### Storage with Rook-Ceph
 
@@ -470,6 +449,67 @@ Rook-Ceph is deployed using **Argo CD** and is composed of two main components:
 tofu apply --var-file=variables.tfvars --target=argocd_application.rook_ceph_operator
 tofu apply --var-file=variables.tfvars --target=argocd_application.rook_ceph_cluster
 ```
+
+### OpenBao & ESO
+
+OpenBao provides secret management for the entire farm cluster. It runs in **HA Raft mode** and uses **Azure Key Vault (AKV)** for auto-unsealing, meaning nodes can restart without manual intervention. The AKV role assignments and key permissions are provisioned via OpenTofu in accordance with [this tutorial](https://developer.hashicorp.com/vault/tutorials/auto-unseal/autounseal-azure-keyvault).
+
+Initialization is handled once through a small **bootstrap Job** (`job-openbao-init`) managed by Argo CD. The job mounts the farm CA bundle, waits for OpenBao to respond, checks whether the cluster is already initialized, and—if required—runs `bao operator init` and prints the recovery key + root token to STDOUT. A TTL cleanup removes the init pod and its logs after a few minutes.
+
+OpenBao is exposed internally behind Traefik with **end-to-end TLS**. Traefik terminates the public certificate, then re-encrypts traffic to Vault using a `ServersTransport` that trusts the internal farm CA.
+
+```mermaid
+flowchart LR
+    Client((Client)) -->|TLS| Traefik
+    Traefik -->|mTLS with farm CA| OpenBao
+    OpenBao --> Raft[(Raft Storage)]
+    OpenBao -->|auto-unseal| AKV[(Azure Key Vault)]
+```
+
+#### Deployment
+
+The deployment process is not straightforward and could certainly be improved. For now, however, the flow is as follows:
+
+```mermaid
+flowchart LR
+    S1["1. OpenTofu deploys Azure Key Vault for auto-unseal"]
+    S2["2. Helm installs the Secrets Store CSI Driver"]
+    S3["3. Helm installs OpenBao in HA Raft mode"]
+    S4["4. K3s Job bootstraps OpenBao (initial config & auth)"]
+    S5["5. OpenTofu manages OpenBao structure (engines, policies, roles)"]
+    S6["6. Helm installs the External Secrets Operator"]
+
+    S1 --> S2 --> S3 --> S4 --> S5 --> S6
+```
+
+Those are the OpenTofu commands:
+
+```sh
+# Apply only the read-only and read-write Vault policies
+tofu apply --var-file=variables.tfvars --target=vault_policy.farm_ro --target=vault_policy.farm_rw
+
+# Import the existing Kubernetes auth backend (created by bootstrap job) into OpenTofu state
+tofu import --var-file=variables.tfvars vault_auth_backend.kubernetes kubernetes/
+
+# Apply only the ESO Kubernetes auth role for OpenBao
+tofu apply --var-file=variables.tfvars --target=vault_kubernetes_auth_backend_role.eso
+```
+
+#### Secrets structure
+
+OpenBao is organized so that each Kubernetes namespace has its own dedicated KV engine. This keeps secrets cleanly separated and lets each workload graze only in its own field. For every KV engine I created two policies, a read-write and a read-only version, named `farm-<namespace>-rw` and `farm-<namespace>-ro`. The ESO role in OpenBao is linked only to the read-only policies, so workloads can fetch secrets but never modify them. On the Kubernetes side, every namespace that needs secrets has its own `SecretStore` pointing to the matching KV engine.
+
+#### Secrets delivery
+
+I will use two paths to deliver secrets from OpenBao to workloads, depending on what the application needs.
+
+- **External Secrets Operator (ESO)** is used when a workload requires a Kubernetes Secret. ESO uses a dedicated role to read from OpenBao and keeps a mirrored Secret in sync.
+This is ideal for Helm charts and controllers that only support `existingSecret` values or require credentials to be set as environment variables.
+- **Secrets Store CSI Driver (CSI)** is used when a workload can consume secrets directly as mounted files, without ever creating a Kubernetes Secret. Pods authenticate to OpenBao using their own `ServiceAccount`, and the CSI provider mounts the secret on the fly. Helm charts support this pattern natively through fields like `extraSecretMounts`, allowing CSI-managed secrets to be attached as regular volumes without modifying the application container.
+
+Both paths use the Kubernetes auth method in OpenBao, with distinct policies and roles ensuring each workload receives only the secrets it is allowed to access.
+
+Additionally the cluster uses the standard [Secrets Store CSI Driver](https://artifacthub.io/packages/helm/secret-store-csi-driver/secrets-store-csi-driver) together with the OpenBao CSI provider. The driver mounts secrets into pods as files, while the provider handles authentication and pulls the data from OpenBao.
 
 ### Garage
 
@@ -514,7 +554,7 @@ To keep an eye on the health, performance, and behavior of the farm (ehm, *clust
 
 All dashboards are managed as code in my GitOps repo, and the Grafana dashboard sidecar auto-discovers and loads them into the UI. The connection to Prometheus as a data source is also defined and reconciled as code, making observability fully GitOps-managed, with Argo CD keeping it all in sync.
 
-> Note: For each app you want to monitor, be sure to enable the relevant metrics exporter in its Helm charr. Otherwise, Prometheus won’t see any data for that workload.
+> Note: For each app you want to monitor, be sure to enable the relevant metrics exporter in its Helm charr. Otherwise, Prometheus won't see any data for that workload.
 
 #### Dashboards
 
@@ -539,7 +579,7 @@ tofu apply --var-file=variables.tfvars --target=Argo CD_application.<app-name>
 
 In theory, connecting to a cluster over SSH should not be difficult, but connecting to this cluster is a bit tricky. The challenge is that a [systemd timer](https://www.freedesktop.org/software/systemd/man/latest/systemd.timer.html) is executed daily to shut down the entire cluster (to avoid wasting electricity). The consequence is that if I'm connected to it and doing things, I get kicked out with a high risk of losing or corrupting the cluster. To solve this challenge, I added an `ssh-look` to the [shutdown logic](#shutdown). If it is present, the shutdown process is interrupted.
 
-### SSH Login
+### SSH login
 
 To create the `ssh-look`, I'm leveraging [fish functions](https://fishshell.com/docs/current/tutorial.html) by creating my klogin function in `.config/fish/functions/klogin.fish` (the Ansible task will follow).
 
@@ -713,6 +753,7 @@ Below is the naming schema used across the cluster:
 | Secret (api auth)     | `auth-api-<name>`       | `auth-api-cloudflare`   |
 | Secret (generic)      | `secret-<purpose>`      | `secret-foo`            |
 | ServiceAccount        | `sa-<name>`             | `sa-argocd`             |
+| ServersTransport      | `st-<name>`             | `st-vault`              |
 
 A lot of resources are created by the corresponding Helm chart, and it is not possible to decide on a name, or it is too overwhelming to change it.
 
@@ -720,26 +761,26 @@ A lot of resources are created by the corresponding Helm chart, and it is not po
 
 ### Cilium network policies
 
-At the early stage of the cluster setup, **Hubble** (Cilium’s observability layer) is not yet deployed, so you won't be able to rely on its UI or CLI from outside the cluster.  
+At the early stage of the cluster setup, **Hubble** (Cilium's observability layer) is not yet deployed, so you won't be able to rely on its UI or CLI from outside the cluster.  
 If a workload cannot be reached or network traffic is unexpectedly dropped, you can troubleshoot directly from the Cilium agent running on the affected node.
 
 1. Identify the node where the workload is running:
 
-  ```sh
-  kubectl get pod -o wide -n <namespace>
-  ```
+    ```sh
+    kubectl get pod -o wide -n <namespace>
+    ```
 
-2. Connect to the Cilium agent running on that node:
+1. Connect to the Cilium agent running on that node:
 
-  ```sh
-  kubectl -n kube-system exec -it cilium-<node-suffix> -- bash
-  ```
+    ```sh
+    kubectl -n kube-system exec -it cilium-<node-suffix> -- bash
+    ```
 
-3. Run Hubble locally to observe dropped packets:
+1. Run Hubble locally to observe dropped packets:
 
-  ```sh
-  hubble observe --verdict DROPPED -f
-  ```
+    ```sh
+    hubble observe --verdict DROPPED -f
+    ```
 
   This will show you which flows are being denied by Cilium Network Policies.
 
@@ -758,7 +799,7 @@ Tasks are listed in order of priority:
 - [ ] Add observability to all workloads, included Mikrotik
 - [ ] Garage Tofu provider for creating buckets
 - [ ] Implement Authentik/MiniAuth/Pocket ID
-- [ ] Investigate whether it makes sense to deploy a **HashiCorp Vault** instance: currently, all secrets are encrypted and stored directly in K3s
+- [X] Investigate whether it makes sense to deploy a ~~**HashiCorp Vault**~~ **OpenBao**  instance: currently, all secrets are encrypted and stored directly in K3s
 - [X] Think if make sense to create a selfsigned CA in cert-manager to improve TLS internal communication between pods
 - [X] All SVC should be in dual-stuck
 - [X] Migrate all deployments to **Argo CD** (in progress)
