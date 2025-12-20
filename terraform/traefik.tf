@@ -43,6 +43,11 @@ resource "argocd_application" "traefik" {
       repo_url        = argocd_repository.repos["github_gitops"].repo
       target_revision = "HEAD"
       ref             = "values"
+      path            = "traefik"
+
+      directory {
+        recurse = true
+      }
     }
 
     destination {
