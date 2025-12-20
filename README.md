@@ -1,4 +1,4 @@
-# Home K3s Cluster — Infrastructure as Code
+# Home K3s Farm Cluster
 
 This repository defines the **Infrastructure as Code (IaC)** setup for my intentionally over-engineered **K3s home cluster**.
 It was built as a learning project to explore Kubernetes operations, but primarily serves to host personal workloads in a modular, automated, and reproducible environment.
@@ -558,12 +558,12 @@ All dashboards are managed as code in my GitOps repo, and the Grafana dashboard 
 
 #### Dashboards
 
-| Name                  | Description                             | Grafana ID |
-|-----------------------|-----------------------------------------|------------|
-| grafana-dashboards-kubernetes | Set of dashboards for K8s     | [Github](https://github.com/dotdc/grafana-dashboards-kubernetes) |
-| CloudNativePG          | The official CloudNativePG dashboard   | [20417](https://grafana.com/grafana/dashboards/20417-cloudnativepg) |
-| Cilium Metrics        | The Cilium Metrics official dashboard   | [21431](https://grafana.com/grafana/dashboards/21431-cilium-metrics) |
-| Traefik               | The Traefik Metrics official dashboard  | [17347](https://grafana.com/grafana/dashboards/17347-traefik-official-kubernetes-dashboard/) |
+| Name                          | Description                            | Grafana ID                                                           |
+|-------------------------------|----------------------------------------|----------------------------------------------------------------------|
+| grafana-dashboards-kubernetes | Set of dashboards for K8s              | [Github](https://github.com/dotdc/grafana-dashboards-kubernetes)     |
+| CloudNativePG                 | The official CloudNativePG dashboard   | [20417](https://grafana.com/grafana/dashboards/20417-cloudnativepg)  |
+| Cilium Metrics                | The Cilium Metrics official dashboard  | [21431](https://grafana.com/grafana/dashboards/21431-cilium-metrics) |
+| Traefik                       | The Traefik Metrics official dashboard | [17347](https://grafana.com/grafana/dashboards/17347-traefik-official-kubernetes-dashboard/) |
 
 ### Other workflows
 
@@ -742,6 +742,7 @@ Below is the naming schema used across the cluster:
 | ClusterRoleBinding    | `crb-<name>`            | `crb-admin-binding`     |
 | ConfigMap             | `cm-<name>`             | `cm-grafana-dashboards` |
 | CronJob               | `cron-<task>`           | `cron-db-backup`        |
+| ExternalSecret        | `eso-<name>`            | `eso-rancher-bootstrap` |
 | Job                   | `job-<task>`            | `job-schema-migration`  |
 | PVC                   | `pvc-<app>-(<purpose>)` | `pvc-postgres-data`     |
 | Role                  | `role-<name>`           | `role-system-metrics`   |
@@ -791,14 +792,16 @@ Once **Hubble** is fully deployed in the cluster, troubleshooting becomes much e
 Tasks are listed in order of priority:
 
 - [ ] Remove all deprecated codes and files (in progress)
-- [ ] Ansible task for fish `klogin` function
+- [ ] Implement KeyCloak (in progress)
+- [ ] Add Cilium API Gateway with K8s API Gateway (TLSRoute) support
+- [ ] OpenBao replace two-hop TLS with TLSRoute
 - [ ] Evaluate Trivy standalone with its operator + Grafana dashboard
 - [ ] Gotify + alertify
 - [ ] Review `securityContext`
 - [ ] Write a desciption on all Ciliun policies and harmonize egress/ingress order and descriptions
 - [ ] Add observability to all workloads, included Mikrotik
-- [ ] Garage Tofu provider for creating buckets
-- [ ] Implement Authentik/MiniAuth/Pocket ID
+- [X] Ansible task for fish `klogin` function
+- [X] Garage Tofu provider for creating buckets
 - [X] Investigate whether it makes sense to deploy a ~~**HashiCorp Vault**~~ **OpenBao**  instance: currently, all secrets are encrypted and stored directly in K3s
 - [X] Think if make sense to create a selfsigned CA in cert-manager to improve TLS internal communication between pods
 - [X] All SVC should be in dual-stuck
