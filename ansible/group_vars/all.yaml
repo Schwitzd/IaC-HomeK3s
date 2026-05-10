@@ -1,1 +1,4 @@
 ansible_python_interpreter: /usr/bin/python3
+kubeconfig_context_name: homefarm
+k3s_version: v1.34
+k3s_api_fqdn: k3s.home.schwitzd.me

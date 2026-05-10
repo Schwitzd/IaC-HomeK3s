@@ -41,7 +41,7 @@ resource "argocd_application" "ark_website_backend" {
     project = "stocks"
 
     source {
-      repo_url        = argocd_repository.repos["github_gitops"].repo
+      repo_url        = local.github_gitops_repo_url
       target_revision = "HEAD"
       path            = "ark-website/backend"
       ref             = "values"
@@ -91,7 +91,7 @@ resource "argocd_application" "ark_website_frontend" {
     project = "stocks"
 
     source {
-      repo_url        = argocd_repository.repos["github_gitops"].repo
+      repo_url        = local.github_gitops_repo_url
       target_revision = "HEAD"
       path            = "ark-website/frontend"
       ref             = "values"

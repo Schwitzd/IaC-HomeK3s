@@ -1,3 +1,4 @@
+---
 apiVersion: "cilium.io/v2"
 kind: CiliumClusterwideNetworkPolicy
 metadata:
@@ -12,7 +13,7 @@ spec:
     # Allow pods to reach CoreDNS
     - toEndpoints:
         - matchLabels:
-            k8s:io.kubernetes.pod.namespace: kube-system
+            io.kubernetes.pod.namespace: kube-system
             app.kubernetes.io/name: coredns
       toPorts:
         - ports:

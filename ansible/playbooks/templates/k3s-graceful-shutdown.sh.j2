@@ -13,7 +13,7 @@ export KUBECONFIG=/home/k3s/.kube/config
 ACTION="${1:-}"
 NODE_NAME=$(hostname)
 LOCK_NAMESPACE="kube-system"
-LOCK_NAME="shutdown-lock"
+LOCK_SHUTDOWN="shutdown-lock"
 LOCK_SSH_PREFIX="ssh-lock-"
 TODAY_UTC="$(date -u +%F)"
 KUBECTL="/usr/bin/kubectl"
@@ -26,22 +26,12 @@ log "  Node: $NODE_NAME  |  Role: {{ role }}"
 if [[ "$ACTION" == "remove-ssh-lock" ]]; then
   CM_NAME="${LOCK_SSH_PREFIX}${NODE_NAME}"
   log "[ACTION] remove-ssh-lock requested for $NODE_NAME -> $CM_NAME"
-  if $KUBECTL -n "$LOCK_NAMESPACE" get configmap "$CM_NAME" >/dev/null 2>&1; then
-    $KUBECTL -n "$LOCK_NAMESPACE" delete configmap "$CM_NAME" --ignore-not-found >/dev/null 2>&1 || true
-    log "[ACTION] Deleted SSH lock ConfigMap $CM_NAME"
-  else
-    log "[ACTION] No SSH lock ConfigMap $CM_NAME present; proceeding"
-  fi
+  $KUBECTL -n "$LOCK_NAMESPACE" delete configmap "$CM_NAME" --ignore-not-found >/dev/null 2>&1 || true
+  log "[ACTION] Deleted SSH lock ConfigMap $CM_NAME (or was not present)"
 fi
 
 {% if role == "control-plane" %}
 log "[WAIT] for workers actions..."
-sleep 15
-{% endif %}
-
-{% if role == "worker" %}
-# Wait 15 seconds for worker nodes
-log "[INFO] Worker node detected, waiting 15 seconds before proceeding..."
 sleep 15
 {% endif %}
 
@@ -91,7 +81,7 @@ scale_down_workloads() {
 
   log "[SHUTDOWN] Scaling down workloads with label '$label' ($desc)..."
 
-  # Get all matching Deployments and StatefulSets in one query
+  # Get all matching Deployments and StatefulSets
   $KUBECTL get deploy,sts --all-namespaces -l "$label" -o jsonpath='{range .items[*]}{.kind}{";"}{.metadata.namespace}{";"}{.metadata.name}{"\n"}{end}' |
   while IFS=";" read -r kind ns name; do
     log "  Scaling $kind $name in namespace $ns to 0 replicas"
@@ -100,8 +90,8 @@ scale_down_workloads() {
 }
 
 # Create shutdown lock ConfigMap and scale down workloads ---
-log "[SHUTDOWN] Creating ConfigMap $LOCK_NAME in namespace $LOCK_NAMESPACE..."
-$KUBECTL -n "$LOCK_NAMESPACE" create configmap "$LOCK_NAME" --from-literal=initiator="$NODE_NAME" --dry-run=client -o yaml | $KUBECTL apply -f -
+log "[SHUTDOWN] Creating ConfigMap $LOCK_SHUTDOWN in namespace $LOCK_NAMESPACE..."
+$KUBECTL -n "$LOCK_NAMESPACE" create configmap "$LOCK_SHUTDOWN" --from-literal=initiator="$NODE_NAME" --dry-run=client -o yaml | $KUBECTL apply -f -
 
 # Scale down ArgoCD & Prometheus operator
 scale_down_workloads "app.kubernetes.io/name=argocd-application-controller" "ArgoCD"
@@ -142,20 +132,31 @@ fi
 log "[SHUTDOWN] All pods dependent on storage have been terminated"
 log "[WAIT] for all Rook-Ceph volumes to be detached from all nodes..."
 
-log "[SHUTDOWN] Removing shutdown lock ConfigMap $LOCK_NAME in namespace $LOCK_NAMESPACE..."
-$KUBECTL -n "$LOCK_NAMESPACE" delete configmap "$LOCK_NAME" --ignore-not-found
+log "[SHUTDOWN] Removing shutdown lock ConfigMap $LOCK_SHUTDOWN in namespace $LOCK_NAMESPACE..."
+$KUBECTL -n "$LOCK_NAMESPACE" delete configmap "$LOCK_SHUTDOWN" --ignore-not-found
 {% endif %}
 
 {% if role == "worker" %}
-# --- WORKER NODE: Wait if control-plane lock exists, then cordon, drain, shutdown ---
-log "[SHUTDOWN] Checking for shutdown lock ConfigMap..."
+# --- WORKER NODE: Wait for control-plane to create then release the shutdown lock ---
+log "[SHUTDOWN] Waiting for control-plane to create shutdown lock..."
+LOCK_WAIT=0
+while ! $KUBECTL -n "$LOCK_NAMESPACE" get configmap "$LOCK_SHUTDOWN" >/dev/null 2>&1; do
+  if [[ $LOCK_WAIT -ge 120 ]]; then
+    log "[WARN] Timed out waiting for shutdown lock to appear, proceeding anyway"
+    break
+  fi
+  log "[WAIT] Shutdown lock not yet present, waiting..."
+  sleep 5
+  LOCK_WAIT=$((LOCK_WAIT + 5))
+done
 
-while $KUBECTL -n "$LOCK_NAMESPACE" get configmap "$LOCK_NAME" >/dev/null 2>&1; do
-  log "[WAIT] for lock ConfigMap $LOCK_NAME exists"
+log "[SHUTDOWN] Shutdown lock detected, waiting for control-plane to finish..."
+while $KUBECTL -n "$LOCK_NAMESPACE" get configmap "$LOCK_SHUTDOWN" >/dev/null 2>&1; do
+  log "[WAIT] Shutdown lock held by control-plane, waiting..."
   sleep 10
 done
 
-log "[SHUTDOWN] No shutdown lock found, proceeding..."
+log "[SHUTDOWN] Shutdown lock released, proceeding..."
 {% endif %}
 
 {% if role == "control-plane" %}

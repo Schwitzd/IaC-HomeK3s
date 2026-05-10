@@ -1,9 +1,9 @@
 resource "helm_release" "traefik" {
   name            = "traefik"
-  namespace       = kubernetes_namespace.namespaces["infrastructure"].metadata[0].name
+  namespace       = kubernetes_namespace.namespaces["edge-gateway"].metadata[0].name
   chart           = "traefik"
   repository      = "https://traefik.github.io/charts"
-  version         = "37.1.2"
+  version         = "40.0.0"
   cleanup_on_fail = true
 
   values = [
@@ -19,65 +19,71 @@ resource "helm_release" "traefik" {
   ]
 }
 
-# Traefik Deployment
-resource "argocd_application" "traefik" {
-  metadata {
-    name      = "traefik"
-    namespace = "argocd"
-  }
+resource "kubernetes_manifest" "traefik_gateway" {
+  manifest = yamldecode(templatefile("${path.module}/traefik-gateway.yaml", {}))
 
-  spec {
-    project = "infrastructure"
-
-    source {
-      repo_url        = "https://traefik.github.io/charts"
-      chart           = "traefik"
-      target_revision = "37.1.2"
-
-      helm {
-        value_files = ["$values/traefik/values.yaml"]
-      }
-    }
-
-    source {
-      repo_url        = argocd_repository.repos["github_gitops"].repo
-      target_revision = "HEAD"
-      ref             = "values"
-      path            = "traefik"
-
-      directory {
-        recurse = true
-      }
-    }
-
-    destination {
-      server    = "https://kubernetes.default.svc"
-      namespace = "infrastructure"
-    }
-
-    sync_policy {
-      automated {
-        prune       = true
-        self_heal   = true
-        allow_empty = false
-      }
-
-      retry {
-        limit = 5
-        backoff {
-          duration     = "30s"
-          max_duration = "2m"
-          factor       = 2
-        }
-      }
-
-      sync_options = [
-        "ApplyOutOfSyncOnly=true"
-      ]
-    }
-  }
-
-  depends_on = [
-    helm_release.argocd
-  ]
+  depends_on = [helm_release.traefik]
 }
+
+# DEPRECATED: Traefik Deployment
+#resource "argocd_application" "traefik" {
+#  metadata {
+#    name      = "traefik"
+#    namespace = "argocd"
+#  }
+#
+#  spec {
+#    project = "infrastructure"
+#
+#    source {
+#      repo_url        = "https://traefik.github.io/charts"
+#      chart           = "traefik"
+#      target_revision = "37.1.2"
+#
+#      helm {
+#        value_files = ["$values/traefik/values.yaml"]
+#      }
+#    }
+#
+#    source {
+#      repo_url        = local.github_gitops_repo_url
+#      target_revision = "HEAD"
+#      ref             = "values"
+#      path            = "traefik"
+#
+#      directory {
+#        recurse = true
+#      }
+#    }
+#
+#    destination {
+#      server    = "https://kubernetes.default.svc"
+#      namespace = "infrastructure"
+#    }
+#
+#    sync_policy {
+#      automated {
+#        prune       = true
+#        self_heal   = true
+#        allow_empty = false
+#      }
+#
+#      retry {
+#        limit = 5
+#        backoff {
+#          duration     = "30s"
+#          max_duration = "2m"
+#          factor       = 2
+#        }
+#      }
+#
+#      sync_options = [
+#        "ApplyOutOfSyncOnly=true"
+#      ]
+#    }
+#  }
+#
+#  depends_on = [
+#    helm_release.argocd
+#  ]
+#}

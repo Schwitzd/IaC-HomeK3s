@@ -1,0 +1,20 @@
+---
+node-ip: "{{ ipv6_address.split('/')[0] }},{{ ansible_facts.default_ipv4.address }}"
+kubelet-arg:
+  - "node-ip={{ ipv6_address.split('/')[0] }},{{ ansible_facts.default_ipv4.address }}"
+{% if role == "control-plane" %}
+write-kubeconfig-mode: "644"
+flannel-backend: none
+disable-cloud-controller: true
+disable:
+  - coredns
+  - servicelb
+  - traefik
+secrets-encryption: true
+cluster-cidr: "fd22:2025:6a6a:00::/56,10.42.0.0/16"
+service-cidr: "fd22:2025:6a6a:ff::/112,10.43.0.0/16"
+disable-network-policy: true
+disable-kube-proxy: true
+tls-san:
+  - {{ k3s_api_fqdn }}
+{% endif %}

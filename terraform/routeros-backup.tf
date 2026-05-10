@@ -51,7 +51,7 @@ resource "argocd_application" "routeros_backup" {
   spec {
     project = "infrastructure"
     source {
-      repo_url        = argocd_repository.repos["github_gitops"].repo
+      repo_url        = local.github_gitops_repo_url
       target_revision = "HEAD"
       path            = "routeros-backup"
       helm {

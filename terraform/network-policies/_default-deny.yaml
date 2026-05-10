@@ -1,12 +1,10 @@
+---
 apiVersion: "cilium.io/v2"
 kind: CiliumClusterwideNetworkPolicy
 metadata:
   name: "default-deny"
 spec:
-  description: "Empty ingress and egress policy to enforce default-deny on all endpoints"
-  endpointSelector:
-    {}
-  ingress:
-  - {}
-  egress:
-  - {}
+  description: "Enable policy enforcement on all endpoints with no allowed traffic by default"
+  endpointSelector: {}
+  ingress: []
+  egress: []

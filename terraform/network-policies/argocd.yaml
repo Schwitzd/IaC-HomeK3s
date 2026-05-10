@@ -1,3 +1,4 @@
+# yamllint disable rule:line-length
 ---
 apiVersion: "cilium.io/v2"
 kind: CiliumClusterwideNetworkPolicy
@@ -15,7 +16,7 @@ spec:
     - fromEndpoints:
         - matchLabels:
             app.kubernetes.io/name: traefik
-            k8s:io.kubernetes.pod.namespace: infrastructure
+            k8s:io.kubernetes.pod.namespace: edge-gateway
       toPorts:
         - ports:
             - port: "8080"
@@ -64,4 +65,6 @@ spec:
       toPorts:
         - ports:
             - port: "443"
+              protocol: TCP
+            - port: "6443"
               protocol: TCP

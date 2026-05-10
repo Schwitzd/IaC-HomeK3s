@@ -18,7 +18,7 @@ resource "argocd_application" "rook_ceph_operator" {
     }
 
     source {
-      repo_url        = argocd_repository.repos["github_gitops"].repo
+      repo_url        = local.github_gitops_repo_url
       target_revision = "HEAD"
       ref             = "values"
     }
@@ -82,7 +82,7 @@ resource "argocd_application" "rook_ceph_cluster" {
     }
 
     source {
-      repo_url        = argocd_repository.repos["github_gitops"].repo
+      repo_url        = local.github_gitops_repo_url
       target_revision = "HEAD"
       ref             = "values"
     }

@@ -1,7 +1,8 @@
 locals {
+  github_gitops_repo_url = data.vault_generic_secret.argocd_github.data["github_repo"]
   namespaces = [
-    "observability", "services", "database", "registry", "stocks", "productivity",
-    "argocd", "infrastructure", "ai", "cattle-system", "rook-ceph", "storage", "pki", "identity"
+    "observability", "services", "database", "registry", "stocks", "productivity", "secrets",
+    "argocd", "ai", "cattle-system", "rook-ceph", "storage", "pki", "identity", "edge-gateway"
   ]
 
   # Argo CD - Repositories
@@ -9,9 +10,9 @@ locals {
     github_gitops = {
       name     = "GitOps-HomeK3s"
       type     = "git"
-      url      = data.vault_generic_secret.argocd.data["github_repo"]
-      username = data.vault_generic_secret.argocd.data["github_username"]
-      password = data.vault_generic_secret.argocd.data["github_pat"]
+      url      = data.vault_generic_secret.argocd_github.data["github_repo"]
+      username = data.vault_generic_secret.argocd_github.data["github_username"]
+      password = data.vault_generic_secret.argocd_github.data["github_pat"]
     },
     bitnami_helm = {
       name       = "Bitnami"

@@ -46,10 +46,10 @@ resource "kubernetes_manifest" "le_clusterissuer" {
     }
   }
 
-depends_on = [
-  helm_release.cert_manager,
-  kubernetes_secret.cloudflare_api_token
-]
+  depends_on = [
+    helm_release.cert_manager,
+    kubernetes_secret.cloudflare_api_token
+  ]
 }
 
 # cert-manager
@@ -58,7 +58,7 @@ resource "helm_release" "cert_manager" {
   namespace       = kubernetes_namespace.namespaces["pki"].metadata[0].name
   repository      = "https://charts.jetstack.io"
   chart           = "cert-manager"
-  version         = "1.18.2"
+  version         = "1.20.2"
   cleanup_on_fail = true
 
 
@@ -72,119 +72,4 @@ resource "helm_release" "cert_manager" {
   depends_on = [ 
     kubernetes_namespace.namespaces["kpi"]
    ]
-}
-
-# cert-manager deployment
-resource "argocd_application" "cert_manager" {
-  metadata {
-    name      = "cert-manager"
-    namespace = "argocd"
-  }
-
-  spec {
-    project = "pki"
-
-    source {
-      repo_url        = "https://charts.jetstack.io"
-      chart           = "cert-manager"
-      target_revision = "1.18.2"
-
-      helm {
-        value_files = ["$values/cert-manager/values.yaml"]
-      }
-    }
-
-    source {
-      repo_url        = argocd_repository.repos["github_gitops"].repo
-      target_revision = "HEAD"
-      ref             = "values"
-      path            = "cert-manager"
-
-      directory {
-        recurse = true
-      }
-    }
-
-    destination {
-      server    = "https://kubernetes.default.svc"
-      namespace = "pki"
-    }
-
-    sync_policy {
-      automated {
-        prune       = false
-        self_heal   = true
-        allow_empty = false
-      }
-
-      retry {
-        limit = 5
-        backoff {
-          duration     = "30s"
-          max_duration = "2m"
-          factor       = 2
-        }
-      }
-
-      sync_options = [
-        "ApplyOutOfSyncOnly=true"
-      ]
-    }
-  }
-
-  depends_on = [
-    helm_release.argocd
-  ]
-}
-
-# farm-ca deployment
-resource "argocd_application" "farm_ca" {
-  metadata {
-    name      = "farm-ca"
-    namespace = "argocd"
-  }
-
-  spec {
-    project = "pki"
-
-    source {
-      repo_url        = argocd_repository.repos["github_gitops"].repo
-      target_revision = "HEAD"
-      path            = "farm-ca"
-
-      directory {
-        recurse = true
-      }
-    }
-
-    destination {
-      server    = "https://kubernetes.default.svc"
-      namespace = "pki"
-    }
-
-    sync_policy {
-      automated {
-        prune       = true
-        self_heal   = true
-        allow_empty = false
-      }
-
-      retry {
-        limit = 5
-        backoff {
-          duration     = "30s"
-          max_duration = "2m"
-          factor       = 2
-        }
-      }
-
-      sync_options = [
-        "ApplyOutOfSyncOnly=true"
-      ]
-    }
-  }
-
-  depends_on = [
-    helm_release.argocd
-  ]
 }

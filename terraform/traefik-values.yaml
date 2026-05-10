@@ -1,24 +1,27 @@
-replicas: 2
-
 service:
   enabled: true
   type: LoadBalancer
   externalIPs:
-    - ${traefik_ipv4}
     - ${traefik_ipv6}
-  annotations:
-    metallb.universe.tf/allow-shared-ip: "traefik"
+    - ${traefik_ipv4}
   ipFamilyPolicy: RequireDualStack
   ipFamilies:
-    - IPv4
     - IPv6
+    - IPv4
+
+providers:
+  kubernetesGateway:
+    enabled: true
+    experimentalChannel: false
+  kubernetesIngress:
+    enabled: false
+
+gatewayClass:
+  enabled: true
+gateway:
+  enabled: false
 
 ports:
-  web:
-    port: 80
-    expose:
-      default: true
-    exposedPort: 80
   websecure:
     port: 443
     expose:

@@ -46,7 +46,7 @@ resource "argocd_application" "paperless_ngx" {
     }
 
     source {
-      repo_url        = argocd_repository.repos["github_gitops"].repo
+      repo_url        = local.github_gitops_repo_url
       target_revision = "HEAD"
       ref             = "values"
       path            = "paperless-ngx"

@@ -1,7 +1,6 @@
 # Home K3s Farm Cluster
 
-This repository defines the **Infrastructure as Code (IaC)** setup for my intentionally over-engineered **K3s home cluster**.
-It was built as a learning project to explore Kubernetes operations, but primarily serves to host personal workloads in a modular, automated, and reproducible environment.
+This repository defines the **Infrastructure as Code (IaC)** setup for my intentionally over-engineered **K3s home cluster**. It was built as a learning project to explore Kubernetes, but primarily serves to host personal workloads in an automated and reproducible environment.
 
 The following tools form the foundation of the cluster's provisioning, configuration, and workload management:
 
@@ -30,8 +29,7 @@ The cluster runs on my **MikroTik-based home network**. See the [network configu
 
 ## Networking
 
-This cluster is configured as a **dual-stack environment**, supporting both IPv4 and IPv6 across all components.  
-While I don't strictly need IPv6 in my home network, I saw it as a great opportunity to learn and experiment with it in a real-world setup.
+This cluster is configured as a **dual-stack environment**, supporting both IPv4 and IPv6 across all components, with IPv6 as the default. While IPv6 is not strictly required in my home network, it serves as a great opportunity to learn and experiment with it.
 
 The networking stack is built around **Cilium**, which is responsible for:
 
@@ -42,34 +40,25 @@ The networking stack is built around **Cilium**, which is responsible for:
 
 ### Network architecture
 
-All cluster nodes are connected to a dedicated VLAN with the following addressing:
+All cluster nodes are connected to a dedicated server VLAN with the following addressing:
 
-- **IPv4:** `192.168.14.0/26`
 - **IPv6:** `fd12:3456:789a:14::/64`
-
-The node's primary IPs are explicitly specified using the `--node-ip` K3s installation flag to ensure dual-stack support.
+- **IPv4:** `192.168.14.0/26`
 
 The Kubernetes **Pod and Service CIDRs** are defined for both address families:
 
 | Purpose          | IPv4 CIDR            | IPv6 CIDR                   |
 |------------------|----------------------|-----------------------------|
-| Cluster Pods     | `10.42.0.0/16`       | `fd22:2025:6a6a:42::/104`   |
-| Cluster Services | `10.43.0.0/16`       | `fd22:2025:6a6a:43::/112`   |
+| Cluster Pods     | `10.42.0.0/16`       | `fd22:2025:6a6a:00::/56`    |
+| Cluster Services | `10.43.0.0/16`       | `fd22:2025:6a6a:ff::/112`   |
 
 The cluster operates under the `home.schwitzd.me` subdomain, delegated from the primary `schwitzd.me` zone. All internal services are exposed using FQDNs such as `pgadmin.home.schwitzd.me` and `grafana.home.schwitzd.me`.
 
-### Secrets handling
+## Secrets handling
 
 The farm relies on two separate secret stores, each with a very different job.
 
 The first one runs on my laptop. It's available right away, before the cluster even exists, and it holds only the minimum secrets I need to bootstrap everything: Argo CD, Azure Key Vault, and OpenBao. The second one is the farm Vault, deployed early in the cluster. Once it's up, it becomes the main place where all workload secrets live. Every app in the farm reads its secrets from here.
-
-This setup keeps the bootstrap simple, while giving the running cluster its own proper secret store.
-
-```sh
-tofu init
-tofu plan
-```
 
 ## Storage
 
@@ -78,12 +67,26 @@ These disks are pooled together using **Rook-Ceph**, which handles replication, 
 
 I originally started with **Longhorn**, but after countless headaches with corrupted PVCs and unreliable volume detachment during shutdowns, I decided to switch to **Rook-Ceph**, which has proven far more stable and resilient — even though it requires significantly more resources and can be a bit overwhelming for a Raspberry Pi-based setup.
 
-## Deployment workflow
+## Prerequisites
 
-### Preparing the nodes
+Create and activate a Python virtual environment (I'm using [Fish shell](https://fishshell.com/) in this example) and install the required dependencies:
 
-Before deploying any workloads, we first need to prepare the Raspberry Pi nodes to host the K3s cluster. Inside the `ansible/` folder, you'll find two playbooks that handle the required system configuration.
+```sh
+python -m venv .venv
+source .venv/bin/activate.fish
+pip install -r requirements.txt
+```
 
+Initialize the OpenTofu environment:
+
+```sh
+tofu init
+tofu plan
+```
+
+## Bootstrap the nodes
+
+Before deploying any workloads, we first need to prepare the Raspberry Pi nodes to host the K3s cluster. Inside the `ansible/playbooks` folder, you'll find playbooks that handle the required system configuration.
 Install the necessary Ansible roles and collections in order to use the playbooks:
 
 ```sh
@@ -92,10 +95,23 @@ ansible-galaxy role install -r requirements.yaml --force
 ansible-galaxy collection install -r requirements.yaml --force
 ```
 
-#### Set up SSH passwordless authentication
+### IPv6 Networking
+
+First step is to configure the network interface of each node with a static IPv6 address:
 
 ```sh
-ansible-playbook -i inventory.yaml ssh-auth.yaml --extra-vars "target=<node-name>" -u k3s -c paramiko --ask-pass
+cd playbooks
+ansible-playbook -i ../inventory.yaml bootstrap-ipv6.yaml \
+  -u k3s \
+  -K \
+  --ask-pass \
+  -e 'ansible_ssh_common_args="-o PubkeyAuthentication=no -o PreferredAuthentications=password -o IdentitiesOnly=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"'
+```
+
+### SSH & passwordless authentication
+
+```sh
+ansible-playbook -i ../inventory.yaml bootstrap-ssh.yaml --extra-vars "target=<node-name>" -u k3s --ask-pass -e 'ansible_ssh_common_args="-o PubkeyAuthentication=no -o PreferredAuthentications=password -o IdentitiesOnly=yes"'
 ```
 
 This playbook performs the following:
@@ -104,7 +120,7 @@ This playbook performs the following:
 - Copies the public key to the target node and appends it to its ~/.ssh/authorized_keys
 - Generates a temporary file in the directory `/tmp/<hostname-fqdn>_ed25519_passphrase.txt` that contains the passphrase
 
-#### K3s pre-requirements
+### K3s pre-requirements
 
 Next, we apply the system-level configuration required to run K3s on the Raspberry Pi nodes:
 
@@ -116,56 +132,46 @@ This playbook performs the following:
 - Add third-party repositories for Helm and Kubectl, then install the required packages
 - Configures K3s environment variables for image garbage collection
 - Prepare disk device and kernel module required by Rook Ceph
-- Sets up static IPv6 networking via NetworkManager
-- Enables IPv6 forwarding for networking compatibility
 - Deploys graceful shutdown and startup scripts + systemd units
 - Configures and enables a cron job to automatically shut down the cluster safely
 
 ```sh
-ansible-playbook -i inventory.yaml k3s.yaml --tag <tag-name>
+ansible-playbook -i ../inventory.yaml k3s.yaml --tag <tag-name> -K
 ```
 
-Because the playbook `k3s.yaml` contains tasks that must be run before and after K3s installation, a controlled deployment is strongly suggested. Before installing K3s, run the following tags in order:
+Because the playbook `k3s.yaml` contains tasks that must be run before and after the K3s installation, a controlled deployment is strongly suggested. Before installing K3s, run the following tags in order:
 
 - sshd
 - apt
-- networking
 - k3s-cgroup
+- k3s-install-config
 
-Follow the [Installation](#installation) section to deploy K3s.  
-Once K3s is installed, run the following Ansible tags in order:
+Follow the [next chapter](#k3s-installation) section to deploy K3s. Once it is installed, run the following Ansible tags in order:
 
 - k3s-cilium
 - k3s-rook-ceph
 - k3s-post
-- k3s-config,k3s-aliases
+- k3s-config,k3s-config-local,k3s-aliases
 - shutdown-startup
 
 Once Kubernetes has been installed and all the Ansible tags applied, we can start deploying resources to the cluster.
 
-## K3s
+## K3s installation
 
-K3s is currently installed manually on each node using the official installation script. While automating this step with Ansible would be ideal, I opted for manual installation due to limited time and haven't yet explored what's already available in the community.
+K3s is currently installed manually on each node using the official installation script. While automating this step with Ansible would be ideal, I opted for manual installation due to limited time and haven't yet explored what's already available in the community. The following sections outline how both the **control-plane** and **worker** nodes are installed using the official K3s script.
 
-### Installation
-
-The following sections outline how both the **control-plane** and **worker** nodes are installed using the official K3s script.
+Before running the installer, make sure the `k3s-install-config` Ansible tag has been applied. It creates `/etc/rancher/k3s/config.yaml` on each node with all the required parameters (node IPs, CIDRs, disabled components, etc.). K3s reads this file automatically at startup, so no flags need to be passed to the install script.
 
 ```sh
-## Master node
-export K3S_KUBECONFIG_MODE="644"
-export INSTALL_K3S_EXEC=" --disable-cloud-controller --disable=coredns --disable=servicelb --disable=traefik --secrets-encryption --flannel-backend=none --node-ip=<ipv4>,<ipv6> --cluster-cidr=<ipv4-range>,<ipv6-range> --service-cidr=<ipv4-range>,<ipv6-range> --kube-controller-manager-arg=node-cidr-mask-size-ipv6=120 --disable-network-policy --disable-kube-proxy --tls-san <cluster-fqdn>"
-
-curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION="<desired-version>" sh
+## Control-plane node
+curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION="<desired-version>" sudo sh -
 
 ## Worker node
-# Get the node token
+# Get the node token from the control-plane
 sudo cat /var/lib/rancher/k3s/server/node-token
 
 # Installation
-INSTALL_K3S_EXEC="--flannel-backend=none --node-ip=<ipv4>,<ipv6>"
-
-curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION="<desired-version>" K3S_URL=https://<RPI_NODE_HOSTNAME>:6443 K3S_TOKEN=<NODE_TOKEN> sh -
+curl -sfL https://get.k3s.io | sudo INSTALL_K3S_VERSION="<desired-version>" K3S_URL=https://<CONTROL_PLANE_HOSTNAME>:6443 K3S_TOKEN=<NODE_TOKEN> sh -
 ```
 
 While it's not best practice to manage the cluster directly from the **control-plane** node, I do so here for the sake of simplicity and ease of local development.
@@ -189,7 +195,7 @@ Once the **control-plane** node is installed, you will notice that it is in the 
 
 First, go back to the [K3s Pre-requirements](#k3s-pre-requirements) section to provision the missing tags, then proceed with the deployment of **Cilium**.
 
-### Deploying resources
+## Deployment workloads
 
 This readme describes the recommended order for deploying the **core services** of the K3s farm cluster. These components form the foundation for networking, ingress, and certificate management, so bringing them up in the correct sequence avoids dependency issues.
 
@@ -229,7 +235,7 @@ tofu apply --var-file=variables.tfvars --target=kubernetes_manifest.cilium_ip
 tofu apply --var-file=variables.tfvars --target=kubernetes_manifest.cilium_l2
 ```
 
-> **Note**: `depends_on` is not sufficient in this case because OpenTOfu resolves CRDs during the planning phase — not at apply time. This is why the manifests must be applied in a separate step after Cilium is installed.
+> **Note**: `depends_on` is not sufficient in this case because OpenTofu resolves CRDs during the planning phase — not at apply time. This is why the manifests must be applied in a separate step after Cilium is installed.
 
 After deploying **Cilium** itself, we apply the fundamental network policies to allow the core workloads (like DNS, Ingress, and cert-manager) to communicate successfully:
 
@@ -377,64 +383,98 @@ spec:
         farm/sync-ca: "true"
 ```
 
-### Ingress with Traefik
+### Gateway API with Traefik
 
-All services in the cluster are exposed externally through **Traefik**, which acts as the **Ingress Controller**.
-**Traefik** is configured to use LoadBalancer IPs provided by **Cilium**, making the setup simpler and more integrated.
+External traffic is routed using the Kubernetes [Gateway API](https://gateway-api.sigs.k8s.io/) instead of the [traditional Traefik Ingress](https://doc.traefik.io/traefik/reference/install-configuration/providers/kubernetes/kubernetes-ingress/). **Traefik** runs as the [Gateway API controller](https://gateway-api.sigs.k8s.io/implementations/) and is exposed through LoadBalancer IPs provided by **Cilium**.
+
+Using the official Helm chart, Traefik deploys the Gateway API controller and advertises a [GatewayClass](https://gateway-api.sigs.k8s.io/api-types/gatewayclass/?h=gatewayclass). Instead [Gateway](https://gateway-api.sigs.k8s.io/api-types/gateway/) resources are defined and managed declaratively in Git: a **minimal Gateway** is bootstrapped only to expose **Argo CD**, after which Argo is responsible for managing additional Gateways, listeners, and routes.
+
+Each service uses a **dedicated HTTPS listener and certificate**, following the Gateway API model of [TLS termination per SNI](https://gateway-api.sigs.k8s.io/guides/tls/#listeners-with-different-certificates).
 
 To deploy **Traefik** initially with OpenTofu:
 
-Deploy **Traefik** with LoadBalancer configuration:
-
 ```sh
+# Deploy Traefik with the offical Helm Chart
 tofu apply --var-file=variables.tfvars --target=helm_release.traefik
+
+# Bootstrap a minimal Gateway for Argo CD
+tofu apply --var-file=variables.tfvars --target=kubernetes_manifest.traefik_gateway
 ```
 
-The diagram below illustrates how external traffic reaches workloads in the cluster using **Cilium** for LoadBalancer IP management and **Traefik** as the Ingress Controller:
+This two-step bootstrap ensures that the GatewayClass and controller exist before creating the initial Gateway used to expose Argo CD.
+
+The diagram below illustrates how external traffic reaches workloads in the cluster using **Cilium** for LoadBalancer IP management and **Traefik** as the Gateway controller:
 
 ```mermaid
 graph LR
-    subgraph K3s Cluster
-        direction TB
-        Cilium[Cilium CNI & LB IPAM]
-        Traefik[Traefik Ingress Controller]
-        Pod1[App Pod 1]
-        Pod2[App Pod 2]
+    Client[Client] --> VIP[(LoadBalancer IP)]
 
-        Cilium --> Traefik
-        Traefik --> Pod1
-        Traefik --> Pod2
+    subgraph K3s["<b>K3s Cluster</b>"]
+      direction LR
+      VIP --> Cilium[Cilium LB IPAM]
+      Cilium --> Traefik[Traefik Gateway Controller]
+      Traefik --> SVC[Kubernetes Service]
+      SVC --> Pod1[App Pod 1]
+      SVC --> Pod2[App Pod 2]
+
+      GatewayAPI[Gateway API objects] -. config .-> Traefik
     end
-
-    Client[Client] --> VirtualIP[(Virtual IP)]
-    VirtualIP --> Cilium
 ```
 
 ### Argo CD
 
-**Argo CD** manages the desired state of all applications and infrastructure deployed to the Home K3s cluster, providing a GitOps workflow for automated and repeatable deployments.
+**Argo CD** manages the desired state of all applications and infrastructure deployed across my clusters, providing a GitOps workflow for automated and repeatable deployments.
 
 **How Argo CD is Integrated**:
 
 - **Project and App Management**: Each major category of workload (e.g., databases, observability, system, registry) is isolated into its own Argo CD Project for RBAC and resource scoping. Applications are registered declaratively using OpenTofu, referencing charts and values from either OCI Helm registries or private Git repos (maybe one day I will opensource it).
 
-- **Deployment**: Workloads are automatically created as **Argo CD** applications using the [ApplicationSet controller](https://argo-cd.readthedocs.io/en/latest/operator-manual/applicationset/), which leverages the [Git generator in file mode](https://argo-cd.readthedocs.io/en/latest/operator-manual/applicationset/Generators-Git/#git-generator-files).
+- **Deployment**: Workloads are automatically created as **Argo CD** applications using the [ApplicationSet controller](https://argo-cd.readthedocs.io/en/latest/operator-manual/applicationset/), which leverages the [Git generator in file mode](https://argo-cd.readthedocs.io/en/latest/operator-manual/applicationset/Generators-Git/#git-generator-files). The ApplicationSet manifest lives in this IaC repository (`terraform/argocd/apps-autodiscovery-farm.yaml`) and is bootstrapped directly via OpenTofu.
 
-- **Secrets**: Sensitive values are never stored in Git. Instead, OpenTofu provisions all required Kubernetes Secrets before **Argo CD** syncs the relevant application. Charts are configured to reference these pre-existing secrets using their existingSecret fields wherever supported.
+- **Self-management**: Once the ApplicationSet is running, ArgoCD manages itself like any other app.
 
-1. To deploy **Argo CD** first bootstrap a minimal version with Helm:
+- **Secrets**: Sensitive values are never stored in Git. Instead, OpenTofu provisions all required Kubernetes Secrets before **Argo CD** syncs the relevant application. Charts are configured to reference these pre-existing secrets using their `existingSecret` fields wherever supported.
+
+- **Clusters**: Argo CD is used as a central control plane for all Kubernetes clusters in my home landscape, including the VPS and Home Assistant K3s nodes. Each cluster is registered explicitly and managed through dedicated projects and service accounts, allowing the individual K3s clusters to remain lightweight and dedicate their limited resources to workloads rather than additional management infrastructure.
+
+1. Deploy **Argo CD** with a minimal Helm bootstrap:
 
     ```sh
     tofu apply --var-file=variables.tfvars --target=helm_release.argocd
     ```
 
-1. Once deployed we will manage **Argo CD** by itself:
+1. Provision the TLS certificate used to securely expose it:
 
     ```sh
-    tofu apply --var-file=variables.tfvars --target=argocd_application.argocd
+    tofu apply --var-file=variables.tfvars --target=kubernetes_manifest.argocd_tls
     ```
 
-You can find details about how I'm using ApplicationSet to deploy workloads on my blog post.
+1. Register the GitOps repository that **Argo CD** will use as its source of truth:
+
+    ```sh
+    tofu apply --var-file=variables.tfvars --target=argocd_repository.gitops
+    ```
+
+1. Bootstrap the ApplicationSet, which triggers auto-discovery of all apps, including ArgoCD itself:
+
+    ```sh
+    tofu apply --var-file=variables.tfvars --target=kubernetes_manifest.apps_autodiscovery_farm
+    ```
+
+At this point, the core infrastructure services are deployed into the cluster via OpenTofu/Helm, and Argo CD is running. However, these services are not yet managed by GitOps. The next step is to bring them under Argo CD management by creating `app.yaml` descriptors in the GitOps repository.
+
+The ApplicationSet controller continuously scans `apps/farm/*/app.yaml` for application descriptors. To bring existing services under GitOps management, create an `app.yaml` file for each of these core services:
+
+- ArgoCD (so it manages itself)
+- Traefik
+- Cilium
+- network-policies
+- CoreDNS
+- Cert-Manager
+
+Once these applications appear in the GitOps repository with their `app.yaml` files, Argo CD will auto-discover and manage them declaratively — including managing itself via `apps/farm/argocd/`. From that point forward, all configuration changes flow through Git, and all remaining workloads are deployed exclusively through the ApplicationSet auto-discovery mechanism.
+
+For a detailed walkthrough of this transition from OpenTofu-managed deployments to ApplicationSet-driven GitOps, see my blog post: [ArgoCD: from OpenTofu to ApplicationSet](https://www.schwitzd.me/posts/argocd-from-opentofu-to-applicationset/).
 
 ### Storage with Rook-Ceph
 
@@ -450,37 +490,9 @@ tofu apply --var-file=variables.tfvars --target=argocd_application.rook_ceph_ope
 tofu apply --var-file=variables.tfvars --target=argocd_application.rook_ceph_cluster
 ```
 
+kubectl -n rook-ceph get secret rook-ceph-dashboard-password -o jsonpath='{.data.password}' | base64 -d
+
 ### OpenBao & ESO
-
-OpenBao provides secret management for the entire farm cluster. It runs in **HA Raft mode** and uses **Azure Key Vault (AKV)** for auto-unsealing, meaning nodes can restart without manual intervention. The AKV role assignments and key permissions are provisioned via OpenTofu in accordance with [this tutorial](https://developer.hashicorp.com/vault/tutorials/auto-unseal/autounseal-azure-keyvault).
-
-Initialization is handled once through a small **bootstrap Job** (`job-openbao-init`) managed by Argo CD. The job mounts the farm CA bundle, waits for OpenBao to respond, checks whether the cluster is already initialized, and—if required—runs `bao operator init` and prints the recovery key + root token to STDOUT. A TTL cleanup removes the init pod and its logs after a few minutes.
-
-OpenBao is exposed internally behind Traefik with **end-to-end TLS**. Traefik terminates the public certificate, then re-encrypts traffic to Vault using a `ServersTransport` that trusts the internal farm CA.
-
-```mermaid
-flowchart LR
-    Client((Client)) -->|TLS| Traefik
-    Traefik -->|mTLS with farm CA| OpenBao
-    OpenBao --> Raft[(Raft Storage)]
-    OpenBao -->|auto-unseal| AKV[(Azure Key Vault)]
-```
-
-#### Deployment
-
-The deployment process is not straightforward and could certainly be improved. For now, however, the flow is as follows:
-
-```mermaid
-flowchart LR
-    S1["1. OpenTofu deploys Azure Key Vault for auto-unseal"]
-    S2["2. Helm installs the Secrets Store CSI Driver"]
-    S3["3. Helm installs OpenBao in HA Raft mode"]
-    S4["4. K3s Job bootstraps OpenBao (initial config & auth)"]
-    S5["5. OpenTofu manages OpenBao structure (engines, policies, roles)"]
-    S6["6. Helm installs the External Secrets Operator"]
-
-    S1 --> S2 --> S3 --> S4 --> S5 --> S6
-```
 
 Those are the OpenTofu commands:
 
@@ -495,21 +507,9 @@ tofu import --var-file=variables.tfvars vault_auth_backend.kubernetes kubernetes
 tofu apply --var-file=variables.tfvars --target=vault_kubernetes_auth_backend_role.eso
 ```
 
-#### Secrets structure
+### IdP with Keycloak
 
-OpenBao is organized so that each Kubernetes namespace has its own dedicated KV engine. This keeps secrets cleanly separated and lets each workload graze only in its own field. For every KV engine I created two policies, a read-write and a read-only version, named `farm-<namespace>-rw` and `farm-<namespace>-ro`. The ESO role in OpenBao is linked only to the read-only policies, so workloads can fetch secrets but never modify them. On the Kubernetes side, every namespace that needs secrets has its own `SecretStore` pointing to the matching KV engine.
-
-#### Secrets delivery
-
-I will use two paths to deliver secrets from OpenBao to workloads, depending on what the application needs.
-
-- **External Secrets Operator (ESO)** is used when a workload requires a Kubernetes Secret. ESO uses a dedicated role to read from OpenBao and keeps a mirrored Secret in sync.
-This is ideal for Helm charts and controllers that only support `existingSecret` values or require credentials to be set as environment variables.
-- **Secrets Store CSI Driver (CSI)** is used when a workload can consume secrets directly as mounted files, without ever creating a Kubernetes Secret. Pods authenticate to OpenBao using their own `ServiceAccount`, and the CSI provider mounts the secret on the fly. Helm charts support this pattern natively through fields like `extraSecretMounts`, allowing CSI-managed secrets to be attached as regular volumes without modifying the application container.
-
-Both paths use the Kubernetes auth method in OpenBao, with distinct policies and roles ensuring each workload receives only the secrets it is allowed to access.
-
-Additionally the cluster uses the standard [Secrets Store CSI Driver](https://artifacthub.io/packages/helm/secret-store-csi-driver/secrets-store-csi-driver) together with the OpenBao CSI provider. The driver mounts secrets into pods as files, while the provider handles authentication and pulls the data from OpenBao.
+Keycloak is the Identity Provider of the cluster and like OpenBao is deployed with **end-to-end TLS**.
 
 ### Garage
 

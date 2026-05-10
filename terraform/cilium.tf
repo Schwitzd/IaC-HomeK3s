@@ -4,16 +4,17 @@ resource "helm_release" "cilium" {
   namespace  = "kube-system"
   repository = "https://helm.cilium.io/"
   chart      = "cilium"
-  version    = "1.18.2"
+  version    = "1.19.3"
 
   values = [
-    yamlencode(yamldecode(templatefile("${path.module}/cilium-values.yaml", {
+    templatefile("${path.module}/cilium-values.yaml", {
       cluster_ipv4_cidr        = "10.42.0.0/16"
-      cluster_ipv6_cidr        = "fd22:2025:6a6a:42::/104"
-      ipv6_native_routing_cidr = "fd22:2025:6a6a:42::/104"
-      k8s_service_host         = "192.168.14.4"
+      cluster_ipv6_cidr        = "fd22:2025:6a6a:00::/56"
+      ipv4_native_routing_cidr = "10.42.0.0/16"
+      ipv6_native_routing_cidr = "fd22:2025:6a6a:00::/56" 
+      k8s_service_host         = "fd12:3456:789a:14:3161:c474:a553:4ea2"
       k8s_service_port         = "6443"
-    })))
+    })
   ]
 }
 
@@ -41,105 +42,105 @@ resource "kubernetes_manifest" "network_policies" {
    ]
 }
 
-# Cilium deployment
-resource "argocd_application" "cilium" {
-  metadata {
-    name      = "cilium"
-    namespace = "argocd"
-  }
+# DEPRECATED: Cilium deployment
+#resource "argocd_application" "cilium" {
+#  metadata {
+#    name      = "cilium"
+#    namespace = "argocd"
+#  }
+#
+#  spec {
+#    project = "cilium"
+#
+#    source {
+#      repo_url        = "https://helm.cilium.io"
+#      chart           = "cilium"
+#      target_revision = "1.18.2"
+#
+#      helm {
+#        value_files = ["$values/cilium/values.yaml"]
+#      }
+#    }
+#
+#    source {
+#      repo_url        = local.github_gitops_repo_url
+#      target_revision = "HEAD"
+#      ref             = "values"
+#    }
+#
+#    destination {
+#      server    = "https://kubernetes.default.svc"
+#      namespace = "kube-system"
+#    }
+#
+#    sync_policy {
+#      automated {
+#        prune       = true
+#        self_heal   = true
+#        allow_empty = false
+#      }
+#
+#      retry {
+#        limit = "5"
+#        backoff {
+#          duration     = "30s"
+#          max_duration = "2m"
+#          factor       = "2"
+#        }
+#      }
+#    }
+#  }
+#
+#  depends_on = [
+#    helm_release.argocd,
+#    kubernetes_manifest.cilium_ip,
+#    kubernetes_manifest.cilium_l2
+#  ]
+#}
 
-  spec {
-    project = "cilium"
-
-    source {
-      repo_url        = "https://helm.cilium.io"
-      chart           = "cilium"
-      target_revision = "1.18.2"
-
-      helm {
-        value_files = ["$values/cilium/values.yaml"]
-      }
-    }
-
-    source {
-      repo_url        = argocd_repository.repos["github_gitops"].repo
-      target_revision = "HEAD"
-      ref             = "values"
-    }
-
-    destination {
-      server    = "https://kubernetes.default.svc"
-      namespace = "kube-system"
-    }
-
-    sync_policy {
-      automated {
-        prune       = true
-        self_heal   = true
-        allow_empty = false
-      }
-
-      retry {
-        limit = "5"
-        backoff {
-          duration     = "30s"
-          max_duration = "2m"
-          factor       = "2"
-        }
-      }
-    }
-  }
-
-  depends_on = [
-    helm_release.argocd,
-    kubernetes_manifest.cilium_ip,
-    kubernetes_manifest.cilium_l2
-  ]
-}
-
-# Cilium Policies
-resource "argocd_application" "cilium_policies" {
-  metadata {
-    name      = "cilium-policies"
-    namespace = "argocd"
-  }
-
-  spec {
-    project = "cilium"
-
-    source {
-      repo_url        = argocd_repository.repos["github_gitops"].repo
-      target_revision = "main"
-      path            = "network-policies"
-
-      directory {
-        recurse = true
-      }
-    }
-
-    destination {
-      server    = "https://kubernetes.default.svc"
-      namespace = "kube-system"
-    }
-
-    sync_policy {
-      automated {
-        prune       = true
-        self_heal   = true
-        allow_empty = false
-      }
-      retry {
-        limit = "5"
-        backoff {
-          duration     = "30s"
-          max_duration = "2m"
-          factor       = "2"
-        }
-      }
-    }
-  }
-
-  depends_on = [
-    argocd_application.cilium
-  ]
-}
+# DEPRECATED: Cilium Policies
+#resource "argocd_application" "cilium_policies" {
+#  metadata {
+#    name      = "cilium-policies"
+#    namespace = "argocd"
+#  }
+#
+#  spec {
+#    project = "cilium"
+#
+#    source {
+#      repo_url        = local.github_gitops_repo_url
+#      target_revision = "main"
+#      path            = "network-policies"
+#
+#      directory {
+#        recurse = true
+#      }
+#    }
+#
+#    destination {
+#      server    = "https://kubernetes.default.svc"
+#      namespace = "kube-system"
+#    }
+#
+#    sync_policy {
+#      automated {
+#        prune       = true
+#        self_heal   = true
+#        allow_empty = false
+#      }
+#      retry {
+#        limit = "5"
+#        backoff {
+#          duration     = "30s"
+#          max_duration = "2m"
+#          factor       = "2"
+#        }
+#      }
+#    }
+#  }
+#
+#  depends_on = [
+#    argocd_application.cilium
+#  ]
+#}

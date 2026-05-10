@@ -1,0 +1,54 @@
+---
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: apps-autodiscovery-farm
+  namespace: argocd
+spec:
+  goTemplate: true
+  goTemplateOptions: ["missingkey=error"]
+
+  generators:
+    - git:
+        repoURL: https://github.com/Schwitzd/GitOps-HomeK3s.git
+        revision: HEAD
+        files:
+          - path: apps/farm/*/app.yaml
+
+  template:
+    metadata:
+      name: "{{ .name }}"
+    spec:
+      project: "{{ .project }}"
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: "{{ .namespace }}"
+
+  templatePatch: |
+    spec:
+      {{- if eq .mode "kustomize" }}
+      source:
+        repoURL: https://github.com/Schwitzd/GitOps-HomeK3s.git
+        targetRevision: HEAD
+        path: '{{ .path.path }}'
+        kustomize:
+          buildOptions: "--enable-helm"
+      {{- end }}
+
+      {{- if eq .mode "helm" }}
+      sources:
+        - repoURL: '{{ .helm.chartRepo }}'
+          chart: '{{ .helm.chart }}'
+          targetRevision: '{{ .helm.chartVersion }}'
+          helm:
+            releaseName: '{{ .name }}'
+            valueFiles:
+              - $values/{{ .path.path }}/{{ default "values.yaml" .helm.valuesFile }}
+
+        - repoURL: https://github.com/Schwitzd/GitOps-HomeK3s.git
+          targetRevision: HEAD
+          ref: values
+      {{- end }}
+      {{- if .syncPolicy }}
+      syncPolicy: {{ toJson .syncPolicy }}
+      {{- end }}

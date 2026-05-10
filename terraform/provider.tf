@@ -24,7 +24,7 @@ terraform {
 
 provider "kubernetes" {
   config_path    = "~/.kube/config"
-  config_context = "default"
+  config_context = "homefarm"
   insecure       = true
 }
 
@@ -44,35 +44,19 @@ provider "vault" {
 provider "helm" {
   kubernetes = {
     config_path    = "~/.kube/config"
-    config_context = "default"
+    config_context = "homefarm"
     insecure       = true
   }
 }
 
 provider "argocd" {
-  server_addr = data.vault_generic_secret.argocd.data["hostname"]
-  username    = data.vault_generic_secret.argocd.data["username"]
-  password    = data.vault_generic_secret.argocd.data["password"]
+  server_addr = data.vault_generic_secret.argocd_admin.data["hostname"]
+  username    = data.vault_generic_secret.argocd_admin.data["username"]
+  password    = data.vault_generic_secret.argocd_admin.data["password"]
 }
 
 provider "garage" {
   host   = data.vault_generic_secret.garage.data["admin_endpoint"]
   scheme = "https"
   token  = data.vault_generic_secret.garage.data["admin_token"]
-}
-
-provider "azurerm" { 
-  features {
-    key_vault {
-      purge_soft_deleted_keys_on_destroy = true
-      recover_soft_deleted_keys          = true
-    }
-  }
-
-  tenant_id       = data.vault_generic_secret.azure.data["tenant_id"]
-  subscription_id = data.vault_generic_secret.azure.data["subscription_id"]
-}
-
-provider "azuread" {
-tenant_id = data.vault_generic_secret.azure.data["tenant_id"]
 }

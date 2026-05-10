@@ -3,12 +3,13 @@
   gather_facts: true
 
   tasks:
-    - name: Provision SSH key for {{ target_host }}
+    - name: Provision SSH key
       ansible.builtin.include_role:
         name: schwitzd.collection.ssh_keygen
       loop: "{{ groups['all'] | select('equalto', target) | list }}"
       loop_control:
         loop_var: target_host
+        label: "{{ target_host }}"
       vars:
         ssh_keygen_user: k3s
         ssh_keygen_server: "{{ hostvars[target_host].ansible_host }}"

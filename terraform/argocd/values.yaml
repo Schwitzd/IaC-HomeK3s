@@ -1,5 +1,10 @@
 global:
   domain: "${argocd_domain}"
+  dualStack:
+      ipFamilyPolicy: "RequireDualStack"
+      ipFamilies:
+      - IPv6
+      - IPv4
 
 configs:
   params:
@@ -42,16 +47,16 @@ server:
     servicePortHttps: 443
   serviceAccount:
     name: sa-argocd-server
-  ingress:
+  httproute:
     enabled: true
-    ingressClassName: traefik
-    annotations:
-      traefik.ingress.kubernetes.io/router.entrypoints: "websecure"
-      cert-manager.io/cluster-issuer: "le-clusterissuer"
-    hostname: "${argocd_domain}"
-    path: /
-    pathType: Prefix
-    tls: true
+    parentRefs:
+      - name: traefik-gateway
+        namespace: edge-gateway
+        sectionName: https-argocd
+    hostnames:
+      - "${argocd_domain}"
+  ingress:
+    enabled: false
 
 controller:
   serviceAccount:

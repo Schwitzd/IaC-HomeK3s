@@ -4,10 +4,10 @@ service:
   enabled: true
   type: ClusterIP
   ipFamilyPolicy: PreferDualStack
-  clusterIP: ${coredns_ipv4}
+  clusterIP: ${coredns_ipv6}
   clusterIPs:
-    - ${coredns_ipv4}
     - ${coredns_ipv6}
+    - ${coredns_ipv4}
   name: kube-dns
 
 tolerations:

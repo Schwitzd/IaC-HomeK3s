@@ -23,15 +23,22 @@
             key_url: "https://packages.buildkite.com/helm-linux/helm-debian/gpgkey"
             key_file: "helm.gpg"
           - name: "kubernetes"
-            repo: "deb [arch=arm64 signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.33/deb/ /"
-            filename: "kubernetes-stable-v1.33"
-            key_url: "https://pkgs.k8s.io/core:/stable:/v1.33/deb/Release.key"
+            repo: "deb [arch=arm64 signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/{{ k3s_version }}/deb/ /"
+            filename: "kubernetes-stable-{{ k3s_version }}"
+            key_url: "https://pkgs.k8s.io/core:/stable:/{{ k3s_version }}/deb/Release.key"
             key_file: "kubernetes-apt-keyring.gpg"
       tags: apt
 
+    - role: schwitzd.collection.kubeconfig_context
+      vars:
+        kube_context_name: "{{ kubeconfig_context_name }}"
+        kube_api_fqdn: "{{ k3s_api_fqdn }}"
+      when: role == "control-plane"
+      tags: k3s-config-local
+
     - role: githubixx.cilium_cli
       vars:
-        cilium_cli_version: "0.18.7"
+        cilium_cli_version: "0.19.2"
         cilium_cli_arch: "arm64"
       when: role == "control-plane"
       tags: k3s-cilium
@@ -61,36 +68,28 @@
           - helm
           - kubectl
           - dnsutils
-#          - open-iscsi
-#          - cryptsetup
         state: present
         update_cache: true
       tags: apt
 
-    # Configure static IPv6 networking using NetworkManager via nmcli
-    - name: Set IPv6 to manual and assign static address
-      community.general.nmcli:
-        type: ethernet
-        conn_name: "{{ ipv6_conn_name }}"
-        autoconnect: true
-        method6: manual
-        ip6: ["{{ ipv6_address }}"]
-        gw6: "{{ ipv6_gateway }}"
-        dns6: "{{ ipv6_dns }}"
-        state: present
-      notify: Restart NetworkManager
-      tags: networking
-
-    # Enable IPv6 Forwarding
-    - name: Create a sysctl config file for IPv6 forwarding
-      ansible.builtin.copy:
-        dest: "/etc/sysctl.d/98-ipv6.conf"
-        content: "net.ipv6.conf.all.forwarding = 1\n"
+    # K3s config file
+    - name: Ensure /etc/rancher/k3s directory exists
+      ansible.builtin.file:
+        path: /etc/rancher/k3s
+        state: directory
         owner: root
         group: root
-        mode: "0644"
-      notify: Reload sysctl
-      tags: networking
+        mode: '0755'
+      tags: k3s-install-config
+
+    - name: Deploy K3s config file for installation
+      ansible.builtin.template:
+       src: k3s-config.yaml.j2
+       dest: /etc/rancher/k3s/config.yaml
+       owner: root
+       group: root
+       mode: '0600'
+      tags: k3s-install-config 
 
     # Enable cgroups for K3s
     - name: Ensure cgroups are enabled in cmdline.txt
@@ -150,39 +149,10 @@
         dest: "/home/{{ ansible_user }}/.kube/config"
         remote_src: true
         owner: "{{ ansible_user }}"
-        group: root
+        group: "{{ ansible_user }}"
         mode: '0640'
         force: true
       when: role == "control-plane"
-      tags: k3s-config
-
-    - name: Fetch kubeconfig from control-plane
-      ansible.builtin.fetch:
-        src: /etc/rancher/k3s/k3s.yaml
-        dest: /tmp/k3s.yaml
-        flat: true
-      when: role == "control-plane"
-      tags: k3s-config
-
-    - name: Replace server address in kubeconfig (locally)
-      ansible.builtin.replace:
-        path: /tmp/k3s.yaml
-        regexp: 'server: https://127\.0\.0\.1:6443'
-        replace: "server: https://{{ k3s_api_fqdn }}:6443"
-      delegate_to: localhost
-      become: false
-      when: role == "control-plane"
-      tags: k3s-config
-
-    - name: Copy kubeconfig with correct server to workers
-      ansible.builtin.copy:
-        src: /tmp/k3s.yaml
-        dest: "/home/{{ ansible_user }}/.kube/config"
-        owner: "{{ ansible_user }}"
-        group: root
-        mode: '0640'
-        force: true
-      when: role == "worker"
       tags: k3s-config
 
     - name: Add KUBECONFIG export and kubectl completion to .bashrc
@@ -252,7 +222,6 @@
       loop:
         - { key: "K3S_GC_IMAGE_AGE", value: "72h" }
         - { key: "K3S_GC_IMAGE_CLEANUP_PERIOD", value: "1d" }
-      when: role == "control-plane"
       notify:
         - Reload systemd
         - Restart K3s service
@@ -299,20 +268,18 @@
     - name: Reboot system
       ansible.builtin.reboot:
 
-    - name: Reload sysctl
-      ansible.builtin.command: sysctl --system
-      changed_when: false
-
     - name: Reload systemd
       ansible.builtin.systemd:
         daemon_reload: true
 
+    - name: Check if K3s service exists
+      ansible.builtin.stat:
+        path: "/etc/systemd/system/{{ 'k3s' if role == 'control-plane' else 'k3s-agent' }}.service"
+      register: k3s_service_file
+      listen: Restart K3s service
+
     - name: Restart K3s service
       ansible.builtin.systemd:
-        name: k3s
+        name: "{{ 'k3s' if role == 'control-plane' else 'k3s-agent' }}"
         state: restarted
-
-    - name: Restart NetworkManager
-      ansible.builtin.systemd:
-        name: NetworkManager
-        state: restarted
+      when: k3s_service_file.stat.exists

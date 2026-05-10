@@ -1,21 +1,29 @@
 # Vault path
-data "vault_generic_secret" "argocd" {
-  path = "${var.vault_name}/argocd"
+data "vault_generic_secret" "argocd_admin" {
+  path = "${var.vault_name}/argocd/admin"
 }
 
-# ArgoCD Deployment
+data "vault_generic_secret" "argocd_cluster_vps" {
+  path = "${var.vault_name}/argocd/clusters/vps"
+}
+
+data "vault_generic_secret" "argocd_github" {
+  path = "${var.vault_name}/argocd/github"
+}
+
+# ArgoCD - Bootstrap deployment
 resource "helm_release" "argocd" {
   name            = "argocd"
   namespace       = kubernetes_namespace.namespaces["argocd"].metadata[0].name
   chart           = "argo-cd"
   repository      = "https://argoproj.github.io/argo-helm"
-  version         = "9.0.5"
+  version         = "9.5.11"
   cleanup_on_fail = true
 
   values = [
-    yamlencode(yamldecode(templatefile("${path.module}/argocd-values.yaml", {
+    yamlencode(yamldecode(templatefile("${path.module}/argocd/values.yaml", {
       argocd_domain                = "argocd.home.schwitzd.me"
-      argocd_server_admin_password = bcrypt(data.vault_generic_secret.argocd.data["password"])
+      argocd_server_admin_password = bcrypt(data.vault_generic_secret.argocd_admin.data["password"])
     })))
   ]
 
@@ -24,111 +32,114 @@ resource "helm_release" "argocd" {
   ]
 }
 
-resource "argocd_application" "argocd" {
-  metadata {
-    name      = "argocd"
-    namespace = "argocd"
-  }
+resource "kubernetes_manifest" "argocd_tls" {
+  manifest = yamldecode(templatefile("${path.module}/argocd/tls.yaml", {}))
 
-  spec {
-    project = "default"
-    source {
-      repo_url        = "https://argoproj.github.io/argo-helm"
-      chart           = "argo-cd"
-      target_revision = "9.1.0"
+  depends_on = [helm_release.argocd]
+}
 
-      helm {
-        value_files = ["$values/argocd/values.yaml"]
-      }
-    }
-
-    source {
-      repo_url        = argocd_repository.repos["github_gitops"].repo
-      target_revision = "HEAD"
-      ref             = "values"
-      path            = "argocd"
-
-      directory {
-        recurse = true
-      }
-    }
-
-    destination {
-      server    = "https://kubernetes.default.svc"
-      namespace = "argocd"
-    }
-
-    sync_policy {
-      automated {
-        prune       = true
-        self_heal   = true
-        allow_empty = false
-      }
-
-      retry {
-        limit = "5"
-        backoff {
-          duration     = "30s"
-          max_duration = "2m"
-          factor       = "2"
-        }
-      }
-    }
-  }
+# ArgoCD - ApplicationSet Farm apps autodiscovery
+resource "kubernetes_manifest" "apps_autodiscovery_farm" {
+  manifest = yamldecode(file("${path.module}/argocd/apps-autodiscovery-farm.yaml"))
 
   depends_on = [
-    kubernetes_namespace.namespaces["argocd"]
+    helm_release.argocd,
+    argocd_repository.gitops,
   ]
 }
 
-# ArgoCD projects - DEPRECATED
-#resource "argocd_project" "projects" {
-#  for_each = local.argocd_projects
-#
+# ArgoCD - GitOps Repository
+resource "argocd_repository" "gitops" {
+  name       = "GitOps-HomeK3s"
+  repo       = data.vault_generic_secret.argocd_github.data["github_repo"]
+  type       = "git"
+  username   = data.vault_generic_secret.argocd_github.data["github_username"]
+  password   = data.vault_generic_secret.argocd_github.data["github_pat"]
+
+  depends_on = [
+    helm_release.argocd
+  ]
+}
+
+#resource "argocd_application" "argocd" {
 #  metadata {
-#    name      = each.key
-#    namespace = kubernetes_namespace.namespaces["argocd"].metadata[0].name
+#    name      = "argocd"
+#    namespace = "argocd"
 #  }
 #
 #  spec {
-#    description  = each.value.description
-#    source_repos = each.value.source_repos
+#    project = "default"
+#    source {
+#      repo_url        = "https://argoproj.github.io/argo-helm"
+#      chart           = "argo-cd"
+#      target_revision = "9.5.0"
 #
-#    dynamic "destination" {
-#      for_each = each.value.namespaces
-#      content {
-#        server    = "https://kubernetes.default.svc"
-#        namespace = destination.value
+#      helm {
+#        value_files = ["$values/argocd/values.yaml"]
 #      }
 #    }
 #
-#    dynamic "cluster_resource_whitelist" {
-#      for_each = lookup(each.value, "cluster_resource_whitelist", [])
-#      content {
-#        group = cluster_resource_whitelist.value.group
-#        kind  = cluster_resource_whitelist.value.kind
+#    source {
+#      repo_url        = local.github_gitops_repo_url
+#      target_revision = "HEAD"
+#      ref             = "values"
+#      path            = "argocd"
+#
+#      directory {
+#        recurse = true
+#      }
+#    }
+#
+#    destination {
+#      server    = "https://kubernetes.default.svc"
+#      namespace = "argocd"
+#    }
+#
+#    sync_policy {
+#      automated {
+#        prune       = true
+#        self_heal   = true
+#        allow_empty = false
+#      }
+#
+#      retry {
+#        limit = "5"
+#        backoff {
+#          duration     = "30s"
+#          max_duration = "2m"
+#          factor       = "2"
+#        }
 #      }
 #    }
 #  }
 #
 #  depends_on = [
-#    helm_release.argocd,
-#    argocd_repository.repos
+#    kubernetes_namespace.namespaces["argocd"]
 #  ]
 #}
 
-# ArgoCD Repositories
-resource "argocd_repository" "repos" {
-  for_each = local.argocd_repositories
+# ArgoCD - VPS Cluster
+resource "kubernetes_secret_v1" "argocd_cluster_vps_secret" {
+  metadata {
+    name      = "argocd-cluster-vps"
+    namespace = "argocd"
+    labels = {
+      "argocd.argoproj.io/secret-type" = "cluster"
+    }
+  }
 
-  repo       = each.value.url
-  name       = each.value.name
-  type       = each.value.type
-  enable_oci = lookup(each.value, "enable_oci", false)
-  username   = lookup(each.value, "username", null)
-  password   = lookup(each.value, "password", null)
+  type = "Opaque"
 
-  depends_on = [
-    helm_release.argocd
-  ]
+  data_wo = {
+    name   = "vps"
+    server = data.vault_generic_secret.argocd_cluster_vps.data["hostname"]
+    config = jsonencode({
+      bearerToken = data.vault_generic_secret.argocd_cluster_vps.data["bearer_token"]
+      tlsClientConfig = {
+        insecure = false
+        caData   = data.vault_generic_secret.argocd_cluster_vps.data["ca_data"]
+      }
+    })
+  }
+  data_wo_revision = 9
 }
