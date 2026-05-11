@@ -71,11 +71,4 @@ resource "argocd_application" "grafana" {
       }
     }
   }
-
-  depends_on = [
-    helm_release.argocd,
-    kubernetes_secret.grafana_admin,
-    argocd_application.rook_ceph_cluster,
-    argocd_application.prometheus
-  ]
 }

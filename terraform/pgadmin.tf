@@ -70,11 +70,4 @@ resource "argocd_application" "pgadmin" {
       }
     }
   }
-
-  depends_on = [
-    kubernetes_namespace.namespaces["database"],
-    helm_release.argocd,
-    kubernetes_secret.pgadmin,
-    argocd_application.rook_ceph_cluster
-  ]
 }

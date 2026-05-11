@@ -55,9 +55,4 @@ resource "argocd_application" "prometheus" {
       }
     }
   }
-
-  depends_on = [
-    helm_release.argocd,
-    argocd_application.rook_ceph_cluster
-  ]
 }

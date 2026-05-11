@@ -72,11 +72,4 @@ resource "argocd_application" "redis" {
       }
     }
   }
-
-  depends_on = [
-    kubernetes_namespace.namespaces["database"],
-    helm_release.argocd,
-    kubernetes_secret.redis,
-    argocd_application.rook_ceph_cluster
-  ]
 }

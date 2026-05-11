@@ -101,14 +101,4 @@ resource "argocd_application" "harbor" {
       }
     }
   }
-
-  depends_on = [
-    helm_release.argocd,
-    kubernetes_secret.harbor_admin,
-    kubernetes_secret.harbor_external_db,
-    kubernetes_secret.harbor_external_redis,
-    argocd_application.rook_ceph_cluster,
-    argocd_application.cnpg_cluster,
-    argocd_application.redis
-  ]
 }

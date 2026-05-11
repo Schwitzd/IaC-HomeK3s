@@ -56,10 +56,4 @@ resource "argocd_application" "garage" {
       }
     }
   }
-
-  depends_on = [
-    kubernetes_namespace.namespaces["storage"],
-    helm_release.argocd,
-    argocd_application.rook_ceph_cluster
-  ]
 }
