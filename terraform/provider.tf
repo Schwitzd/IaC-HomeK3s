@@ -4,14 +4,6 @@ terraform {
       source = "hashicorp/kubernetes"
     }
 
-    azurerm = {
-      source = "hashicorp/azurerm"
-    }
-  
-    azuread = {
-      source = "hashicorp/azuread"
-    }
-
     argocd = {
       source = "argoproj-labs/argocd"
     }

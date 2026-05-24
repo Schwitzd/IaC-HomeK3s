@@ -83,7 +83,6 @@ resource "argocd_application" "paperless_ngx" {
     helm_release.argocd,
     kubernetes_secret.paperless_external_db,
     kubernetes_secret.paperless_external_redis,
-    argocd_application.cnpg_cluster,
     argocd_application.redis
   ]
 }

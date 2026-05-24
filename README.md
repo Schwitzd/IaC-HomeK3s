@@ -281,9 +281,11 @@ tofu apply --var-file=variables.tfvars --target=kubernetes_manifest.le_clusteris
 
 #### Farm CA
 
-Because the internal **Farm CA** (the cluster's private certificate authority) is managed by **Cert-Manager**, and many core services depend on it, it needs to be bootstrapped early in the cluster lifecycle.
+Because the internal **Farm CA** (the cluster's private certificate authority) is managed by **cert-manager**, and many core services depend on it, it needs to be bootstrapped early in the cluster lifecycle.
 
-1. Create the bootstrap `ClusterIssuer` by adding the file `clusterissuer-selfsigned-bootstrap.yaml` to the GitOps repo:
+This is a one-time chicken-and-egg process: the Farm CA certificate is signed by a temporary self-signed `ClusterIssuer` (`selfsigned-bootstrap`) that is removed once the CA is in place.
+
+1. In `apps/farm/farm-ca/`, uncomment `clusterissuer-selfsigned-bootstrap.yaml` and re-enable its entry in `kustomization.yaml`. Commit and push this together with `app.yaml` — ArgoCD's ApplicationSet will auto-discover the app and deploy all manifests in one sync.
 
     ```yaml
     ---
@@ -295,35 +297,23 @@ Because the internal **Farm CA** (the cluster's private certificate authority) i
       selfSigned: {}
     ```
 
-2. Apply the Farm CA using the ArgoCD application to trigger the deployment of the Farm CA manifests:
-
-    ```sh
-    tofu apply --var-file=variables.tfvars --target=argocd_application.farm_ca
-    ```
-
-3. Wait until the Secret `farm-ca-keypair` appears in the `pki` namespace. This confirms the CA has been successfully created by cert-manager:
+2. Wait until the Secret `farm-ca-keypair` appears in the `pki` namespace, confirming the CA was successfully issued:
 
     ```sh
     kubectl -n pki get secret farm-ca-keypair
     ```
 
-4. Remove the `clusterissuer-selfsigned-bootstrap.yaml` file and comment out the relevant line in the `kustomization.yaml` file in the GitOps repository.
-
-5. Sync again with **Argo CD** to prune the now-unneeded bootstrap issuer from your cluster.
+3. Comment out `clusterissuer-selfsigned-bootstrap.yaml` in both the file itself and in `kustomization.yaml`, then commit and push. ArgoCD will automatically prune the bootstrap issuer on the next sync.
 
 #### Trust Manager
 
-**trust-manager** makes it easy to share your internal CA (`ca.crt`) with all workloads—securely and automatically. Instead of copying secrets (which may include private keys), **trust-manager** distributes only the CA certificate, following best practices and enabling safe rotation when your CA changes.
+**trust-manager** distributes only the CA certificate (not the private key) to workloads that need to trust it, enabling safe rotation when your CA changes.
 
 [Read more about why this separation matters in the official trust-manager docs.](https://cert-manager.io/docs/trust/)
 
-To deploy it with **Argo CD**:
+Commit and push `apps/farm/trust-manager/app.yaml` to the GitOps repository — ArgoCD's ApplicationSet will auto-discover and deploy it.
 
-```sh
-tofu apply --var-file=variables.tfvars --target=argocd_application.trust_manager
-```
-
-By default, **trust-manager** does **not** have access to secrets in all namespaces (you can probably guess why). You must explicitly specify which secrets it can manage. In this setup, I'm only allowing access to the `farm-ca-bundle`:
+By default, **trust-manager** does not have access to secrets in all namespaces. Only explicitly authorized secrets can be distributed — in this setup, only `farm-ca-bundle`:
 
 ```yaml
 secretTargets:
@@ -333,7 +323,7 @@ secretTargets:
     - farm-ca-bundle
 ```
 
-Also by default the ca secrets is created on every namespaces, since I don't need it on all I'm filtering with a label `farm/sync-ca: "true"` on which should be synched:
+The CA is distributed via a `Bundle` resource. Distribution is restricted to namespaces labelled `farm/sync-ca: "true"` rather than syncing to every namespace:
 
 ```yaml
 apiVersion: trust.cert-manager.io/v1alpha1
@@ -349,32 +339,6 @@ spec:
   target:
     secret:
       key: ca.crt
-      metadata:
-        labels:
-          app.kubernetes.io/component: "trust-bundle"
-    namespaceSelector:
-      matchLabels:
-        farm/sync-ca: "true"
-```
-
-Additionally, trust-manager would (by default) distribute the CA secret to every namespace. To restrict this distribution, I use a namespace label, `farm/sync-ca: "true"` to control which namespaces receive the CA:
-
-```yaml
-apiVersion: trust.cert-manager.io/v1alpha1
-kind: Bundle
-metadata:
-  name: farm-ca-bundle
-  namespace: pki
-spec:
-  sources:
-    - secret:
-        name: farm-ca-keypair
-        key: ca.crt
-        namespace: pki
-  target:
-    secret:
-      key: ca.crt
-      name: farm-ca-bundle
       metadata:
         labels:
           app.kubernetes.io/component: "trust-bundle"
@@ -476,21 +440,28 @@ Once these applications appear in the GitOps repository with their `app.yaml` fi
 
 For a detailed walkthrough of this transition from OpenTofu-managed deployments to ApplicationSet-driven GitOps, see my blog post: [ArgoCD: from OpenTofu to ApplicationSet](https://www.schwitzd.me/posts/argocd-from-opentofu-to-applicationset/).
 
+#### Remote Clusters
+
+To centrally manage remote clusters, a Kubernetes secret of type `cluster` is created in the `argocd` namespace on the Farm cluster. This secret is labeled with `argocd.argoproj.io/secret-type: cluster` so ArgoCD recognises it as a remote cluster registration.
+
+```sh
+tofu apply --var-file=variables.tfvars --target=kubernetes_secret_v1.argocd_cluster_vps_secret
+```
+
 ### Storage with Rook-Ceph
 
-The default storage pool is named `haystack`, inspired by the idea of a place where valuable things are tucked away — in this case, all the cluster's persistent data. This is where Persistent Volume Claims (PVCs) are stored and used by workloads that need to retain data across reboots.
+The default storage pool is named `haystack`, inspired by the idea of a place where valuable things are safely tucked away. It holds all the cluster's persistent data and serves Persistent Volume Claims (PVCs) used by workloads that need to retain data across pod restarts and rescheduling. Workloads reference it via the `haystack-block` StorageClass.
 
 Rook-Ceph is deployed using **Argo CD** and is composed of two main components:
 
 - **The Operator**, which acts as a controller that manages the lifecycle of Ceph resources inside the cluster.
 - **The Cluster**, which defines how Ceph itself is configured — including monitors, OSDs, storage pools, and more.
 
-```sh
-tofu apply --var-file=variables.tfvars --target=argocd_application.rook_ceph_operator
-tofu apply --var-file=variables.tfvars --target=argocd_application.rook_ceph_cluster
-```
+Once the cluster is deployed, retrieve the Dashboard login password by running the following command:
 
+```sh
 kubectl -n rook-ceph get secret rook-ceph-dashboard-password -o jsonpath='{.data.password}' | base64 -d
+```
 
 ### OpenBao & ESO
 
@@ -507,29 +478,15 @@ tofu import --var-file=variables.tfvars vault_auth_backend.kubernetes kubernetes
 tofu apply --var-file=variables.tfvars --target=vault_kubernetes_auth_backend_role.eso
 ```
 
-### IdP with Keycloak
-
-Keycloak is the Identity Provider of the cluster and like OpenBao is deployed with **end-to-end TLS**.
-
-### Garage
-
-I decided to switch from MinIO to **Garage** after [MinIO's removal of key features from the community edition](https://github.com/minio/object-browser/pull/3509). MinIO is following a "Redis momentum" and almost all functionality are now available only in the enterprise tier. At the time of writing, **Garage** does not offer a web UI and can only be configured from the command line interface (CLI), unlike MinIO, which had a really nice web UI.
-
-The deployment uses the same Argo CD strategy, but **Garage** requires a cluster layout before storing data. I automated this step using a Kubernetes job that runs upon initial installation, detects the node ID, and applies the layout.
-
-The plan is to automate the process of creating the buckets, which are currently created manually using the CLI inside the container. The goal is to find a Tofu provider to automate this task.
-
-Since switching from Longhorn to **Rook-Ceph**, the other valid alternative is to use the integrated S3-compatible feature in the latter. However, using it requires additional containers with high resource requirements, which are currently overfilling my RPis, so I decided to use Garage instead.
-
 ### PostgreSQL with CloudNativePG
 
-After Bitnami announced they would retire their community-maintained Helm charts and shift toward a commercial offering focused on secure, production-ready images — [as detailed in this announcement](https://news.broadcom.com/app-dev/broadcom-introduces-bitnami-secure-images-for-production-ready-containerized-applications), I began searching for a Kubernetes-native alternative to manage my PostgreSQL databases.
+After Bitnami announced they would retire their community-maintained Helm charts and shift toward a commercial offering focused on secure, production-ready images, [as detailed in this announcement](https://news.broadcom.com/app-dev/broadcom-introduces-bitnami-secure-images-for-production-ready-containerized-applications), I began searching for a Kubernetes-native alternative to manage my PostgreSQL databases.
 
 That's when I discovered **[CloudNativePG](https://cloudnative-pg.io/)**: an open-source, CNCF-hosted operator built specifically for running PostgreSQL on Kubernetes.
 
 What makes CloudNativePG great:
 
-- **Kubernetes-native lifecycle management**: PostgreSQL clusters, users, databases, backups, failover behavior, and bootstrap scripts are all defined declaratively using Custom Resources (CRs).
+- **Kubernetes-native lifecycle management**: PostgreSQL clusters, roles, databases, backups, failover behavior, and bootstrap scripts are all defined declaratively using Custom Resources (CRs).
 - **Built-in high availability**: Supports multi-instance clusters with synchronous replication and automatic failover.
 - **Self-healing**: Automatically promotes a new primary if the current one goes down.
 
@@ -538,15 +495,115 @@ Just like the rest of my stack, **CloudNativePG** is fully managed via Argo CD. 
 - **The Operator** – Monitors and reconciles `Cluster` resources and automates the full PostgreSQL lifecycle.
 - **The Cluster** – A declarative resource that defines the PostgreSQL setup: replicas, storage, authentication, and init logic.
 
-Deployment follows the usual pattern:
+Databases and roles are both managed declaratively:
 
-```sh
-# Deploy the operator
-tofu apply --var-file=variables.tfvars --target=argocd_application.cnpg_operator
+- **Databases** are defined as `Database` custom resources and applied alongside the cluster via Argo CD. Each app gets its own database with a dedicated owner.
+- **Roles** are declared directly in the `Cluster` spec under `managed.roles`, with passwords never stored in git.
 
-# Deploy your PostgreSQL cluster
-tofu apply --var-file=variables.tfvars --target=argocd_application.cnpg_cluster
+Each role and the superuser have their own dedicated secret in OpenBAO, each storing a `username` and `password` pair. ESO syncs them into the `database` namespace as `kubernetes.io/basic-auth` secrets, which CNPG then references directly.
+
+<details>
+<summary>OpenBAO secret structure for CNPG</summary>
+
+```text
+farm/database/
+└── cnpg/
+    ├── superuser
+    │   ├── username
+    │   └── password
+    ├── backup
+        │   ├── access_key_id
+        │   └── secret_access_key
+    └── roles/
+        ├── <app-name>
+        │   ├── username
+        │   └── password
+        ├── ...
 ```
+</details>  
+
+The cluster TLS certificate is issued internally by my farm CA via cert-manager, keeping PostgreSQL traffic encrypted within the cluster without any external exposure.
+
+### Woodpecker
+
+Every farm needs a good worker that shows up, does the job, and disappears without leaving a mess. [Woodpecker](https://woodpecker-ci.org/) is that worker, it is the CI/CD engine of the farm, wired to **GitHub** and ready to run pipelines whenever code lands.
+
+When a pipeline fires, Woodpecker instructs the Kubernetes API to spin up ephemeral pods in the `cicd` namespace, one per step, and tears them down the moment they are done. All state lives in the shared **PostgreSQL** cluster, so nothing important is ever stuck inside a container.
+
+Since the farm does not expose itself to the internet, GitHub webhooks need a way through the fence. I route them via a **Cloudflare Tunnel**, keeping the ingress private while still letting GitHub knock on the door reliably.
+
+```mermaid
+graph LR
+    subgraph Internet
+        GH[GitHub]
+        CF[Cloudflare Tunnel]
+    end
+
+    subgraph K3s["<b>K3s Cluster (cicd namespace)</b>"]
+        direction LR
+        Traefik[Traefik Gateway]
+        Server[Woodpecker Server]
+        Agent[Woodpecker Agent]
+        CNPG[(PostgreSQL\ncnpg-cluster)]
+        Pods[Pipeline Pods\nephemeral]
+
+        Traefik --> Server
+        Server -- gRPC --> Agent
+        Server --> CNPG
+        Agent -- spawn --> Pods
+    end
+
+    GH -- webhook --> CF --> Traefik
+    GH -- OAuth --> Traefik
+    Server -- API calls --> GH
+```
+
+<details>
+<summary>OpenBAO secret structure for Woodpecker</summary>
+
+```text
+farm/woodpecker/
+└── woodpecker/
+    ├── github
+    │   ├── client-id
+    │   └── client-secret
+    └── db
+        └── datasource
+
+farm/database/
+└── cnpg/
+    └── roles/
+        └── woodpecker
+            ├── username
+            └── password
+```
+</details>
+
+### IdP with Keycloak
+
+Keycloak is the Identity Provider of the cluster and like OpenBao is deployed with **end-to-end TLS**.
+
+### Garage
+
+I decided to switch from MinIO to **Garage** after [MinIO's removal of key features from the community edition](https://github.com/minio/object-browser/pull/3509). MinIO is following a "Redis momentum" and almost all functionality are now available only in the enterprise tier.
+
+Garage is managed by the [garage-operator](https://github.com/rajsinghtech/garage-operator), which handles the full lifecycle of the cluster via Kubernetes CRDs: `GarageCluster` defines the storage nodes and replication, while `GarageBucket` and `GarageKey` manage buckets and access credentials declaratively. This replaces the previous approach of manual Helm chart deployment with bootstrap Jobs.
+
+The operator provisions a web UI ([garage-ui](https://github.com/Noooste/garage-ui)) that provides a browser-based interface for managing buckets and keys. Access is protected via **OIDC authentication** through Keycloak, with users required to hold the `admin` client role on the `garage-ui` client before they can log in.
+
+<details>
+<summary>OpenBAO secret structure for Garage</summary>
+
+```text
+farm/storage/
+└── garage/
+    ├── admin
+    │   └── admin-token
+    └── ui
+        └── client-secret
+```
+
+</details>
 
 ### Observability stack
 

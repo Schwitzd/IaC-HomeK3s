@@ -15,7 +15,7 @@ spec:
     - fromEndpoints:
         - matchLabels:
             app.kubernetes.io/name: traefik
-            k8s:io.kubernetes.pod.namespace: infrastructure
+            k8s:io.kubernetes.pod.namespace: edge-gateway
       toPorts:
         - ports:
             - port: "8081"

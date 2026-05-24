@@ -91,6 +91,26 @@
        mode: '0600'
       tags: k3s-install-config 
 
+    # Disable zram swap — rpi-swap enables it by default but it degrades K3s under memory pressure
+    - name: Ensure /etc/rpi/swap.conf.d directory exists
+      ansible.builtin.file:
+        path: /etc/rpi/swap.conf.d
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+      tags: k3s-zram
+
+    - name: Disable zram swap via rpi-swap override
+      ansible.builtin.copy:
+        dest: /etc/rpi/swap.conf.d/k3s.conf
+        content: |
+          CONF_SWAPSIZE=0
+        owner: root
+        group: root
+        mode: '0644'
+      tags: k3s-zram
+
     # Enable cgroups for K3s
     - name: Ensure cgroups are enabled in cmdline.txt
       ansible.builtin.lineinfile:
@@ -114,6 +134,24 @@
       ansible.builtin.command: wipefs -a {{ ceph_disk }}
       register: wipe_result
       changed_when: wipe_result.rc == 0
+      tags: k3s-rook-ceph
+
+    - name: Zap partition table from ceph disk
+      ansible.builtin.command: sgdisk --zap-all {{ ceph_disk }}
+      register: sgdisk_result
+      changed_when: sgdisk_result.rc == 0
+      tags: k3s-rook-ceph
+
+    - name: Discard all blocks on ceph disk
+      ansible.builtin.command: blkdiscard {{ ceph_disk }}
+      register: blkdiscard_result
+      failed_when: false
+      changed_when: blkdiscard_result.rc == 0
+      tags: k3s-rook-ceph
+
+    - name: Settle udev after disk wipe
+      ansible.builtin.command: udevadm settle
+      changed_when: false
       tags: k3s-rook-ceph
 
     - name: Ensure /etc/modules-load.d/k3s_rook_ceph.conf exists with proper permissions

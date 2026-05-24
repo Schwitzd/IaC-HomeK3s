@@ -2,7 +2,8 @@ locals {
   github_gitops_repo_url = data.vault_generic_secret.argocd_github.data["github_repo"]
   namespaces = [
     "observability", "services", "database", "registry", "stocks", "productivity", "secrets",
-    "argocd", "ai", "cattle-system", "rook-ceph", "storage", "pki", "identity", "edge-gateway"
+    "argocd", "ai", "cattle-system", "rook-ceph", "storage", "pki", "identity", "edge-gateway",
+    "cicd"
   ]
 
   # Argo CD - Repositories

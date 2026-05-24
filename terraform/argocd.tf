@@ -61,63 +61,6 @@ resource "argocd_repository" "gitops" {
   ]
 }
 
-#resource "argocd_application" "argocd" {
-#  metadata {
-#    name      = "argocd"
-#    namespace = "argocd"
-#  }
-#
-#  spec {
-#    project = "default"
-#    source {
-#      repo_url        = "https://argoproj.github.io/argo-helm"
-#      chart           = "argo-cd"
-#      target_revision = "9.5.0"
-#
-#      helm {
-#        value_files = ["$values/argocd/values.yaml"]
-#      }
-#    }
-#
-#    source {
-#      repo_url        = local.github_gitops_repo_url
-#      target_revision = "HEAD"
-#      ref             = "values"
-#      path            = "argocd"
-#
-#      directory {
-#        recurse = true
-#      }
-#    }
-#
-#    destination {
-#      server    = "https://kubernetes.default.svc"
-#      namespace = "argocd"
-#    }
-#
-#    sync_policy {
-#      automated {
-#        prune       = true
-#        self_heal   = true
-#        allow_empty = false
-#      }
-#
-#      retry {
-#        limit = "5"
-#        backoff {
-#          duration     = "30s"
-#          max_duration = "2m"
-#          factor       = "2"
-#        }
-#      }
-#    }
-#  }
-#
-#  depends_on = [
-#    kubernetes_namespace.namespaces["argocd"]
-#  ]
-#}
-
 # ArgoCD - VPS Cluster
 resource "kubernetes_secret_v1" "argocd_cluster_vps_secret" {
   metadata {
@@ -141,5 +84,5 @@ resource "kubernetes_secret_v1" "argocd_cluster_vps_secret" {
       }
     })
   }
-  data_wo_revision = 9
+  data_wo_revision = 10
 }
