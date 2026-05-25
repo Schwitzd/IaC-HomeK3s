@@ -235,7 +235,8 @@ tofu apply --var-file=variables.tfvars --target=kubernetes_manifest.cilium_ip
 tofu apply --var-file=variables.tfvars --target=kubernetes_manifest.cilium_l2
 ```
 
-> **Note**: `depends_on` is not sufficient in this case because OpenTofu resolves CRDs during the planning phase — not at apply time. This is why the manifests must be applied in a separate step after Cilium is installed.
+> [!NOTE]
+> `depends_on` is not sufficient in this case because OpenTofu resolves CRDs during the planning phase — not at apply time. This is why the manifests must be applied in a separate step after Cilium is installed.
 
 After deploying **Cilium** itself, we apply the fundamental network policies to allow the core workloads (like DNS, Ingress, and cert-manager) to communicate successfully:
 
@@ -243,7 +244,8 @@ After deploying **Cilium** itself, we apply the fundamental network policies to 
 tofu apply --var-file=variables.tfvars --target=kubernetes_manifest.network_policies
 ```
 
-> ⚠️ **Keep in mind:** at this stage, the previous command only allows fundamental policies that enable the core services of the cluster to communicate with each other. However, I expect that some **Cilium policy violations** will occur. Please refer to the troubleshooting section, [Cilium network policies](#cilium-network-policies), for guidance on identifying and resolving these issues.
+> [!WARNING]
+> At this stage the previous command only allows fundamental policies that enable the core services of the cluster to communicate with each other. However, I expect that some **Cilium policy violations** will occur. Please refer to the troubleshooting section, [Cilium network policies](#cilium-network-policies), for guidance on identifying and resolving these issues.
 In addition, at the time of writing, the Hubble UI primarily focuses on pod-to-pod traffic. Dropped traffic originating from the `host` or `remote-node` may not be visible in the UI. For full visibility, including host-level and remote-node policy drops, use the **Hubble CLI**.
 
 The **Cilium CLI** is installed automatically on the **control-plane** node via a dedicated **Ansible role**, allowing easy access to status and observability features like `cilium status` and `cilium monitor`.
@@ -277,7 +279,8 @@ tofu apply --var-file=variables.tfvars --target=helm_release.cert_manager
 tofu apply --var-file=variables.tfvars --target=kubernetes_manifest.le_clusterissuer
 ```
 
-> **Note**: `depends_on` is not sufficient here because OpenTofu resolves CRDs during the planning phase, not at apply time.
+> [!NOTE]
+> `depends_on` is not sufficient here because OpenTofu resolves CRDs during the planning phase, not at apply time.
 
 #### Farm CA
 
@@ -465,18 +468,14 @@ kubectl -n rook-ceph get secret rook-ceph-dashboard-password -o jsonpath='{.data
 
 ### OpenBao & ESO
 
-Those are the OpenTofu commands:
+**[OpenBao](https://openbao.org/)** is an open source fork of HashiCorp Vault and serves as the central secrets manager across the entire infrastructure. It runs on the Farm cluster and is sealed using **Azure Key Vault** for automatic unseal on restart.
 
-```sh
-# Apply only the read-only and read-write Vault policies
-tofu apply --var-file=variables.tfvars --target=vault_policy.farm_ro --target=vault_policy.farm_rw
+**[External Secrets Operator (ESO)](https://external-secrets.io/)** bridges OpenBao and Kubernetes by reading secrets from OpenBao and syncing them into native Kubernetes `Secret` objects that workloads can consume normally. ESO is deployed on every cluster so that both Farm and remote clusters (e.g., VPS) can reach the Farm's OpenBao instance to retrieve secrets.
 
-# Import the existing Kubernetes auth backend (created by bootstrap job) into OpenTofu state
-tofu import --var-file=variables.tfvars vault_auth_backend.kubernetes kubernetes/
+`SecretStore` and `ClusterSecretStore` resources, which define how each cluster authenticates to OpenBao, are managed in the dedicated **[IaC-SecretsStore](https://github.com/Schwitzd/IaC-SecretsStore)** repository. Secrets themselves are never stored in git.
 
-# Apply only the ESO Kubernetes auth role for OpenBao
-tofu apply --var-file=variables.tfvars --target=vault_kubernetes_auth_backend_role.eso
-```
+> [!NOTE]
+> For full details on the OpenBao setup, ESO configuration, and secret organization, see the dedicated README in that repository.
 
 ### PostgreSQL with CloudNativePG
 
@@ -581,7 +580,9 @@ farm/database/
 
 ### IdP with Keycloak
 
-Keycloak is the Identity Provider of the cluster and like OpenBao is deployed with **end-to-end TLS**.
+The **Farm realm** is bootstrapped at deploy time via a realm import embedded in the Helm values (login settings, password policy, roles, and groups). Client applications (OIDC clients) are managed separately in the dedicated **Farm-Realm** private repository, which keeps client configuration as code and decouples it from the cluster infrastructure.
+
+A **Woodpecker CI pipeline** in that repository uses [keycloak-config-cli](https://github.com/adorsys/keycloak-config-cli) to apply client definitions to Keycloak on every push to `main`. Each client is declared as a YAML file under `clients/`. Adding a new file creates or updates the corresponding Keycloak client, and clients not defined in the repo are left untouched.
 
 ### Garage
 
@@ -611,7 +612,8 @@ To keep an eye on the health, performance, and behavior of the farm (ehm, *clust
 
 All dashboards are managed as code in my GitOps repo, and the Grafana dashboard sidecar auto-discovers and loads them into the UI. The connection to Prometheus as a data source is also defined and reconciled as code, making observability fully GitOps-managed, with Argo CD keeping it all in sync.
 
-> Note: For each app you want to monitor, be sure to enable the relevant metrics exporter in its Helm charr. Otherwise, Prometheus won't see any data for that workload.
+> [!NOTE]
+> For each app you want to monitor, be sure to enable the relevant metrics exporter in its Helm charr. Otherwise, Prometheus won't see any data for that workload.
 
 #### Dashboards
 
@@ -722,9 +724,9 @@ flowchart TD
   N --> O[Cordon and drain node]
   O --> P[Stop k3s or k3s-agent service]
   P --> Q[Power off node]
-
 ```
 
+> [!NOTE]
 > The entire shutdown process is orchestrated by the script:  
 > `/usr/local/bin/k3s-graceful-shutdown.sh`  
 >
@@ -765,6 +767,7 @@ flowchart TD
   S1 --> S2 --> S3 -- "Wait for CoreDNS" --> S5 -- "Wait for Rook-Ceph" --> S6 --> S7 --> S8
 ```
 
+> [!NOTE]
 > The entire startup process is orchestrated by the script:
 > `/usr/local/bin/k3s-post-startup.sh`
 >
@@ -849,14 +852,14 @@ Once **Hubble** is fully deployed in the cluster, troubleshooting becomes much e
 Tasks are listed in order of priority:
 
 - [ ] Remove all deprecated codes and files (in progress)
-- [ ] Implement KeyCloak (in progress)
-- [ ] Add Cilium API Gateway with K8s API Gateway (TLSRoute) support
-- [ ] OpenBao replace two-hop TLS with TLSRoute
+- [ ] Add observability to all workloads, included Mikrotik (in progress)
 - [ ] Evaluate Trivy standalone with its operator + Grafana dashboard
 - [ ] Gotify + alertify
 - [ ] Review `securityContext`
 - [ ] Write a desciption on all Ciliun policies and harmonize egress/ingress order and descriptions
-- [ ] Add observability to all workloads, included Mikrotik
+- [X] OpenBao replace two-hop TLS with TLSRoute
+- [X] Add Cilium API Gateway with K8s API Gateway (TLSRoute) support
+- [X] Implement KeyCloak
 - [X] Ansible task for fish `klogin` function
 - [X] Garage Tofu provider for creating buckets
 - [X] Investigate whether it makes sense to deploy a ~~**HashiCorp Vault**~~ **OpenBao**  instance: currently, all secrets are encrypted and stored directly in K3s
