@@ -11,7 +11,7 @@ resource "helm_release" "cilium" {
       cluster_ipv4_cidr        = "10.42.0.0/16"
       cluster_ipv6_cidr        = "fd22:2025:6a6a:00::/56"
       ipv4_native_routing_cidr = "10.42.0.0/16"
-      ipv6_native_routing_cidr = "fd22:2025:6a6a:00::/56" 
+      ipv6_native_routing_cidr = "fd22:2025:6a6a:00::/56"
       k8s_service_host         = "fd12:3456:789a:14:3161:c474:a553:4ea2"
       k8s_service_port         = "6443"
     })
@@ -37,9 +37,9 @@ resource "kubernetes_manifest" "network_policies" {
 
   manifest = yamldecode(file("${path.module}/network-policies/${each.value}"))
 
-  depends_on = [ 
+  depends_on = [
     kubernetes_namespace.namespaces
-   ]
+  ]
 }
 
 # DEPRECATED: Cilium deployment

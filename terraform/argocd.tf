@@ -50,11 +50,11 @@ resource "kubernetes_manifest" "apps_autodiscovery_farm" {
 
 # ArgoCD - GitOps Repository
 resource "argocd_repository" "gitops" {
-  name       = "GitOps-HomeK3s"
-  repo       = data.vault_generic_secret.argocd_github.data["github_repo"]
-  type       = "git"
-  username   = data.vault_generic_secret.argocd_github.data["github_username"]
-  password   = data.vault_generic_secret.argocd_github.data["github_pat"]
+  name     = "GitOps-HomeK3s"
+  repo     = data.vault_generic_secret.argocd_github.data["github_repo"]
+  type     = "git"
+  username = data.vault_generic_secret.argocd_github.data["github_username"]
+  password = data.vault_generic_secret.argocd_github.data["github_pat"]
 
   depends_on = [
     helm_release.argocd

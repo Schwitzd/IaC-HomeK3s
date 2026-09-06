@@ -5,8 +5,8 @@ function klogin
     end
 
     set -l host $argv[1]
-    set -l fqdn "$host.home.schwitzd.me"
-    set -l key  "$HOME/.ssh/$host.schwitzd.me_ed25519"
+    set -l fqdn "$host.{{ home_domain }}"
+    set -l key  "$HOME/.ssh/$host.{{ home_domain }}_ed25519"
 
     # Run kubectl, then keep the session open with a login shell
     set -l remote_cmd "kubectl -n kube-system create configmap ssh-lock-$host --dry-run=client -o yaml | kubectl apply -f - >/dev/null 2>&1; exec bash -l"

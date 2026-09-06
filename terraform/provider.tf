@@ -26,13 +26,6 @@ provider "vault" {
   skip_child_token = true
 }
 
-provider "vault" {
-  alias            = "farm"
-  address          = data.vault_generic_secret.vault_farm.data["address"]
-  token            = data.vault_generic_secret.vault_farm.data["token"]
-  skip_child_token = true
-}
-
 provider "helm" {
   kubernetes = {
     config_path    = "~/.kube/config"

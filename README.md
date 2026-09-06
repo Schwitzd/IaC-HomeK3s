@@ -651,7 +651,7 @@ function klogin
 
     set -l host $argv[1]
     set -l fqdn "$host.schwitzd.me"
-    set -l key  "$HOME/.ssh/$host.schwitzd.me_ed25519"
+    set -l key  "$HOME/.ssh/$host.home.schwitzd.me_ed25519"
 
     # Run kubectl, then keep the session open with a login shell
     set -l remote_cmd "kubectl -n kube-system create ConfigMap ssh-lock-$host 2>/dev/null; exec bash -l"
@@ -853,7 +853,7 @@ Tasks are listed in order of priority:
 
 - [ ] Remove all deprecated codes and files (in progress)
 - [ ] Add observability to all workloads, included Mikrotik (in progress)
-- [ ] Evaluate Trivy standalone with its operator + Grafana dashboard
+- [ ] Evaluate    standalone with its operator + Grafana dashboard
 - [ ] Gotify + alertify
 - [ ] Review `securityContext`
 - [ ] Write a desciption on all Ciliun policies and harmonize egress/ingress order and descriptions

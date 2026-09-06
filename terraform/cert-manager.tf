@@ -69,7 +69,7 @@ resource "helm_release" "cert_manager" {
     }
   ]
 
-  depends_on = [ 
+  depends_on = [
     kubernetes_namespace.namespaces["kpi"]
-   ]
+  ]
 }

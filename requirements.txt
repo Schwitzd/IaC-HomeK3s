@@ -1,3 +1,4 @@
 ansible-lint
 ansible
 bcrypt
+pre-commit

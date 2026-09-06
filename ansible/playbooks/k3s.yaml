@@ -4,7 +4,6 @@
   become: true
 
   vars:
-    k3s_api_fqdn: k3s.home.schwitzd.me
     ceph_disk: /dev/nvme0n1
 
   roles:
@@ -121,6 +120,19 @@
         state: present
       notify: Reboot system
       tags: k3s-cgroup
+
+    # Inotify limits for K3s
+    - name: Set inotify kernel parameters
+      ansible.posix.sysctl:
+        name: "{{ item.key }}"
+        value: "{{ item.value }}"
+        sysctl_file: /etc/sysctl.conf
+        state: present
+        reload: true
+      loop:
+        - { key: "fs.inotify.max_user_instances", value: "8192" }
+        - { key: "fs.inotify.max_user_watches", value: "524288" }
+      tags: k3s-sysctl
 
     # Rook ceph
     - name: Unmount ceph disk
